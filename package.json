@@ -1,0 +1,26 @@
+{
+  "name": "fieldflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Serverless extensions and widgets for a low-code field-service app",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "prepare": "git config core.hooksPath .githooks",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "verify": ".claude/skills/verify/verify.sh"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@vitest/coverage-v8": "^4.1.12",
+    "eslint": "^9.39.1",
+    "eslint-plugin-security": "^3.0.1",
+    "globals": "^16.5.0",
+    "jsdom": "^26.1.0",
+    "vitest": "^4.1.12"
+  }
+}

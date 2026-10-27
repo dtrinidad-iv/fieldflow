@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Runs on every commit (yours and Claude's). Installed by `npm install` (the prepare script).
+set -e
+root="$(git rev-parse --show-toplevel)"
+"$root/scripts/scan-secrets.sh" --staged
+npm run --silent lint
+npm run --silent test
