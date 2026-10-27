@@ -1,6 +1,7 @@
 # 01 — Claude Code safety tooling
 
-**Status:** WIP
+**Status:** Done
+**Commits:** `c8dadda` (claude)
 
 ## Goal
 Set up the guard rails before any app code exists. AI-assisted work on this repo must not:
