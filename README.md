@@ -71,7 +71,7 @@ flowchart LR
 | PDF invoice, generated and stored privately | **Custom**, Lambda (plan 04) | No server-side PDF rendering, and no private file storage reachable through the API |
 | Signature capture, and a total that updates while typing | **Custom**, widgets (plan 05) | Native forms have no drawing pad, and totals update only on save |
 | Form checks: required fields, no past dates, positive amounts, no double-booking on the form | **Native** | Form validation rules (plan 07) |
-| Double-booking caught however a job was changed (board, inline edit, import) | **Custom**, Lambda (plan 07) | Validation rules only run on forms; this flags conflicts after the save |
+| Double-booking caught however a job was changed (inline edit, import, the API) | **Custom**, Lambda (plan 07) | Validation rules only run on forms; this flags conflicts after the save |
 | Completed jobs that can't be invoiced are sent back with the reason | **Custom**, in the invoice Lambda (plan 07) | Validation rules can't count a job's line items or see a board drag |
 
 ## Features
@@ -182,6 +182,7 @@ config/
   invoice.json        Business details printed on invoices
 scripts/
   tadabase-check.js   Read-only check of the Tadabase app against the mapping
+  smoke-test.js       Read-only check of a deployed stack's endpoints
   scan-secrets.sh     Secret scanner (pre-commit and CI)
 tests/                Vitest: functions, lib, adapters (contract tests), infra and hooks
 docs/
@@ -250,6 +251,16 @@ The full step-by-step guide is **[docs/tadabase-setup.md](docs/tadabase-setup.md
 
 The stack is defined in `template.yaml`, with two stages in `samconfig.toml`: `fieldflow-dev` and
 `fieldflow-prod`, both in `us-east-1`. Deploy dev first and test it end to end before touching prod.
+
+**First time?** Follow [docs/go-live.md](docs/go-live.md): it starts from no AWS account and walks
+through the account, CLI sign-in, the app, secrets, the first deploy and every live check, in
+order. [docs/walkthrough.md](docs/walkthrough.md) is a 15-minute end-to-end demo for afterwards.
+
+After every deploy, check the stack's endpoints (read-only; it never calls Tadabase):
+
+```bash
+node scripts/smoke-test.js <ApiUrl> dev
+```
 
 Every deploy goes through a **changeset you review before it runs**:
 
@@ -344,8 +355,9 @@ This repo is built to make mistakes against live data or AWS hard:
 | 05 | Signature pad and live total widgets, demo page | Done (live check pending) |
 | 06 | Kanban board (native) | Done (live check pending) |
 | 07 | Job checks (CRM contact sync moved to later) | Done (live check pending) |
-| 08 | Deploy, README and walkthrough | Planned |
+| 08 | Go live: accounts, first deploy, live checks, walkthrough | WIP |
 
 **Not deployed yet.** The code is complete and tested offline. The first deploy, the live
 end-to-end test, and confirming the Tadabase API details still open in the plans (response shapes,
-webhook retries) happen in plan 08. Details are in [docs/plans/](docs/plans/README.md).
+filters, webhook retries) happen in plan 08, following [docs/go-live.md](docs/go-live.md).
+Details are in [docs/plans/](docs/plans/README.md).

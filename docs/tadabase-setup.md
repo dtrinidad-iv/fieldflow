@@ -8,6 +8,9 @@ and sends the webhooks. The AWS functions only do what the platform can't (see "
 custom" at the end).
 
 ## 1. Plan and apps
+> Going live for the first time? [go-live.md](go-live.md) gives the order of everything (AWS
+> account, this guide's sections, the deploy, the live checks) as one checklist.
+
 - Outgoing webhooks need the **Pro plan or higher**.
 - You need **two apps**: `FieldFlow` (prod) and `FieldFlow Dev`. Build the prod app first (steps 2
   and 3), then duplicate it for dev. Each stage of the AWS stack talks only to its own app, so dev
@@ -89,25 +92,30 @@ You can add more fields; the code ignores anything it doesn't map.
    run AWS writes.
 
    ```bash
+   # In a separate terminal, not inside Claude Code (not even with `!`).
+   export AWS_PROFILE=fieldflow  # your admin sign-in (go-live.md, phase B); `aws sso login --sso-session fieldflow` if it expired
    export AWS_REGION=us-east-1   # the stack's region (samconfig.toml); parameters elsewhere aren't found
    STAGE=dev                     # then repeat with STAGE=prod and the prod app's values
 
-   # Each value is typed (or pasted) without echo, so it never lands in your shell history.
+   # Each value is typed (or pasted) without echo, so it never lands in your shell history, and is
+   # passed on standard input, so it never shows in the process list either.
    for NAME in app-id app-key app-secret; do
      printf 'Tadabase %s: ' "$NAME"; read -rs VALUE; echo
-     aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/tadabase/$NAME" --value "$VALUE"
+     printf '%s' "$VALUE" | aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/tadabase/$NAME" --value file:///dev/stdin
    done
    unset VALUE
-   aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/webhook-secret" --value "$(openssl rand -hex 32)"
-   aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/link-secret"    --value "$(openssl rand -hex 32)"
+   openssl rand -hex 32 | tr -d '\n' | aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/webhook-secret" --value file:///dev/stdin
+   openssl rand -hex 32 | tr -d '\n' | aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/link-secret"    --value file:///dev/stdin
    ```
 
    Don't add `--key-id`: the default `aws/ssm` key needs no extra permission, while a
    customer-managed key would also need a `kms:Decrypt` grant on every function.
 
-   Add `--overwrite` to rotate a value; running functions pick it up within 5 minutes. To see the
-   webhook secret once, for step 6 (don't paste it anywhere but the webhook's header):
-   `aws ssm get-parameter --with-decryption --query Parameter.Value --output text --name "/fieldflow/$STAGE/webhook-secret"`.
+   Add `--overwrite` to rotate a value; running functions pick it up within 5 minutes. To get the
+   webhook secret for step 6, in the same separate terminal, copy it straight to the clipboard (it
+   never shows on screen) and paste it only into the webhook's header:
+   `aws ssm get-parameter --with-decryption --query Parameter.Value --output text --name /fieldflow/dev/webhook-secret | pbcopy`
+   (use `/fieldflow/prod/...` for prod).
 
 ## 5. Field slugs: fill in the mapping
 Tadabase names fields `field_NN` in the API. The code maps them in `config/tadabase.dev.json` and
@@ -287,7 +295,8 @@ can't see: board drags, inline edits, imports and the API.
 5. **Check on the dev app:**
    1. The double-booking rule accepts Scheduled Date and Slot as additional fields, and blocks a
       second booking of the same technician, date and slot.
-   2. Make a double booking another way (drag, inline edit): within seconds both jobs show
+   2. Make a double booking another way: inline-edit a job's Slot in an office table, or import
+      one (a board drag only changes Status, so it can't double-book). Within seconds both jobs show
       Schedule Conflict. Move one to another slot: both flags clear. This proves two API filters
       the function relies on (a connection field matched by record id, and "contains" on text);
       if no flag ever appears, report it, since those filters aren't confirmed yet.
