@@ -167,6 +167,38 @@ The function answers:
 - `503` or `5xx` when it ran out of time or the app didn't answer: nothing is lost, and a retry (or
   saving the job again) finishes it, never creating a second invoice.
 
+## 8. Widgets (plan 05)
+Two small scripts add what native forms can't: a **signature pad** on the job's completion form,
+and a **live line total** on the Job Items form. They hold no keys and call no API: the signature
+is saved by the form's own Save button, and the total is display only. Try them first in
+`demo/index.html` (open it in a browser).
+
+1. **Complete job form:** on the job details page, add a form that edits the job, with
+   **Signature** (Long Text) and **Status**. Optional, native: make Signature required on this form,
+   so a job can't be completed unsigned.
+2. **Lock the signature down.** The signature is only as trustworthy as who can edit the field.
+   Anyone who can edit Signature can paste in another image, for example one copied from another
+   job. So, natively:
+   - Signature is editable only on the Complete job form, and only for the roles that complete jobs.
+   - Every other form, inline edit in tables, and imports leave Signature out, or show it read-only.
+   - Keep record history on for Jobs, so a replaced signature can be traced.
+3. **Paste the code:** `widgets/signature-pad.js` and `widgets/line-total.js` into the app's custom
+   JavaScript, and `widgets/signature-pad.css` and `widgets/line-total.css` into its custom CSS.
+   Paste them again whenever they change in the repo.
+4. **Mount them:** add the snippets from [`widgets/README.md`](../widgets/README.md) to each page's
+   JavaScript, with that page's component ids and this app's field slugs (`jobs.signature`,
+   `jobItems.quantity`, `jobItems.unitPrice` in `config/tadabase.<stage>.json`).
+5. **Check on the dev app** (these couldn't be confirmed from the docs alone):
+   1. The pad and the total appear. If a widget says a field "was not found", inspect the input
+      (right-click → Inspect) and note its attributes: the widget looks for `name="field_NN"`.
+   2. Sign a test job and press Save. The job details page shows the signature as an image, which
+      proves the value was saved and came back intact.
+   3. If Signature is required: press Save without signing. You should see a visible "required"
+      message, not a Save button that silently does nothing.
+   4. Add a job item. The total updates while you type, and matches the native Line Total after
+      saving. Type `1.234,50` as the price: a hint appears. If nothing appears, the inputs are
+      `type="number"` (the browser hides what was typed), and the hint can only cover text inputs.
+
 ## What stays custom
 | Need | Why the platform can't do it natively | Plan |
 |---|---|---|

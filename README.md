@@ -6,7 +6,7 @@ of code where the platform falls short:
 
 - **AWS Lambda functions** (`functions/`, Node 24, deployed with AWS SAM) for server-side work the
   platform can't do, such as rendering PDF invoices.
-- **Widgets** (`widgets/`, vanilla JS/CSS, from plan 05) injected into app pages for interactions
+- **Widgets** (`widgets/`, vanilla JS/CSS) injected into app pages for interactions
   the native components lack, such as a signature pad or a drag-and-drop board.
 
 **The rule: build natively first; write code only when the platform can't do it.** The data, the
@@ -109,6 +109,26 @@ flowchart LR
 - The PDF comes back directly (`private, no-store`, `nosniff`). A bad signature gives `403`, and a
   missing PDF gives `404`.
 
+### Signature pad (`widgets/signature-pad.js`)
+- On the job's **Complete job** form, the customer signs with a finger, pen or mouse. The pad
+  writes the signature into the form's own Signature (Long Text) field as a PNG data URL, and the
+  native **Save** stores it. The widget calls no API and holds no keys.
+- On the job details page, view mode shows the saved signature as an image. Only a PNG data URL
+  under 100 KB is ever used as an image; anything else shows "No signature".
+- Safe on pages that re-render (mounting twice is a no-op), and it shows a visible message when its
+  field isn't found or the browser can't draw.
+
+### Live line total (`widgets/line-total.js`)
+- On the **Job Items** form, shows `Quantity × Unit Price` while typing, formatted in the business
+  currency.
+- Uses the same strict rules as the invoice function (a test keeps them in sync), so an amount the
+  invoice would reject, such as `1.234,50`, is flagged as you type instead of failing later.
+- Display only: the native Line Total formula is what gets saved.
+
+### Demo page (`demo/index.html`)
+- A stand-in for the Tadabase pages, with fake data, to try both widgets locally. Open the file in
+  a browser; no server or app is needed.
+
 ### Health check (`functions/health`)
 - `GET /health` returns `{ ok, stage }`. It has no secret, no data and no platform calls, and is
   used to smoke-test a deploy.
@@ -135,7 +155,10 @@ lib/                  Shared code, bundled into each function by esbuild
   aws.js              Lazy S3 and DynamoDB clients from the Lambda runtime SDK
   log.js              JSON logger that redacts secrets
   platform/           The data adapter: interface, in-memory version, Tadabase REST version
-widgets/              Front-end widgets (from plan 05)
+widgets/              Browser widgets, pasted into the app (install guide: widgets/README.md)
+  signature-pad.js/.css  Signature capture on the Complete job form, image on the details page
+  line-total.js/.css     Live Quantity × Unit Price on the Job Items form
+demo/                 Local demo page for the widgets (open demo/index.html)
 config/
   tadabase.dev.json   Table ids and field slugs for the dev app
   tadabase.prod.json  Same for the prod app
@@ -193,7 +216,10 @@ The full step-by-step guide is **[docs/tadabase-setup.md](docs/tadabase-setup.md
    Then set `"placeholder": false` and run it again: every line should say `OK`. Repeat for prod.
 6. **Fill in your business details** in `config/invoice.json` and set `"placeholder": false`. The
    invoice function refuses to run until you do.
-7. **After deploying, add the outgoing webhook:** Jobs, on record update, filtered to Status =
+7. **Install the widgets:** paste `widgets/*.js` and `widgets/*.css` into the app's custom
+   JavaScript and CSS, and add the mount snippets from [widgets/README.md](widgets/README.md). This
+   doesn't depend on AWS, so it can be done before the deploy.
+8. **After deploying, add the outgoing webhook:** Jobs, on record update, filtered to Status =
    `Completed`, `POST` to the `JobCompletedWebhookUrl` stack output, with header
    `X-FieldFlow-Secret: <webhook-secret>` and body `{"recordId": "{record_id}"}`.
 
