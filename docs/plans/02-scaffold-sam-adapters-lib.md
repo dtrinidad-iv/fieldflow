@@ -20,10 +20,10 @@ Why custom: the platform has no server-side code. Every later Lambda needs the s
 
 ## Decisions
 - **HTTP API (`AWS::Serverless::HttpApi`), not REST API:** cheaper and simpler, and it supports route throttling. We need none of the REST-only features.
-- **Runtime:** `nodejs20.x` (as in CLAUDE.md) on `arm64`, which is cheaper at the same speed. ES modules.
+- **Runtime:** `nodejs24.x` on `arm64`, which is cheaper at the same speed. ES modules. (First shipped as `nodejs20.x`; the first CI `sam validate` flagged it as deprecated since 2026-04-30, with creation disabled from 2027-02-01, so a follow-up commit moved everything to Node 24.)
 - **Region:** `us-east-1` by default, set in `samconfig.toml`. Change it there if you prefer another.
 - **Stages:** `dev` and `prod` as `samconfig.toml` config envs. Stacks are `fieldflow-dev` and `fieldflow-prod`, with a `Stage` parameter. Every deploy section keeps `confirm_changeset = true`.
-- **No production dependencies.** Node 20 has `fetch`, `AbortSignal.timeout` and `crypto.timingSafeEqual`. Validation is a few small helpers in `lib/validate.js`, not a schema library.
+- **No production dependencies.** Node 24 has `fetch`, `AbortSignal.timeout` and `crypto.timingSafeEqual`. Validation is a few small helpers in `lib/validate.js`, not a schema library.
 - **New dev dependencies (approved):**
   - **`esbuild`:** SAM's `BuildMethod: esbuild` bundles each function with only the `lib/` code it imports. `CodeUri` is the repo root (functions import `../../lib`), but only the bundle ships, not the repo.
   - **`yaml`** (eemeli/yaml, no dependencies): parses `template.yaml` with its CloudFormation tags (`!Ref`, `!Sub`, `!GetAtt`) for the template test. A regex check would be easy to fool.
@@ -105,14 +105,14 @@ Adapter interface (documented with JSDoc in `index.js`), all async:
 
 **`template.yaml`:**
 - `Globals`:
-  - runtime `nodejs20.x`, `arm64`
+  - runtime `nodejs24.x`, `arm64`
   - timeout 10 s, memory 256 MB
   - environment `STAGE`, `FIELDFLOW_ALLOW_LIVE_WRITES: "1"` (the deployed stack is the only place it's set; `readConfig` ignores it under `sam local`, where `AWS_SAM_LOCAL=true`), and `NODE_OPTIONS: --enable-source-maps`
 - `Parameters`: `Stage` (`dev` | `prod`).
 - `HttpApi`: `AWS::Serverless::HttpApi` with `DefaultRouteSettings` throttling (burst 20, rate 10/s, per route) and an access log group.
 - `HealthFunction`:
   - `CodeUri: ./`, `Handler: handler.handler`
-  - `Metadata: BuildMethod: esbuild`, with entry point `functions/health/handler.js`, format esm, `.mjs` output, target es2022, a source map, and no minifying (readable stack traces)
+  - `Metadata: BuildMethod: esbuild`, with entry point `functions/health/handler.js`, format esm, `.mjs` output, target `node24`, a source map, and no minifying (readable stack traces)
   - `LoggingConfig: { LogFormat: JSON, LogGroup: !Ref HealthLogGroup }`
   - event `GET /health`
   - no policies beyond the basic execution role

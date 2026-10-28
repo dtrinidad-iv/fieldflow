@@ -134,6 +134,15 @@ describe('template.yaml: runtime limits', () => {
     expect(api.Properties.DefaultRouteSettings.ThrottlingRateLimit).toBeGreaterThan(0);
   });
 
+  it('runs every function on the Node major from package.json engines, built for the same target', () => {
+    const { engines } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
+    const major = engines.node.match(/\d+/)[0];
+    for (const [id, fn] of ofType('AWS::Serverless::Function')) {
+      expect(fn.Properties.Runtime ?? globals.Runtime, id).toBe(`nodejs${major}.x`);
+      expect(fn.Metadata?.BuildProperties?.Target, id).toBe(`node${major}`);
+    }
+  });
+
   it('allows live Tadabase writes only through the deployed stack environment', () => {
     expect(globals.Environment.Variables.FIELDFLOW_ALLOW_LIVE_WRITES).toBe('1');
   });

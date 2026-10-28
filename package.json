@@ -5,7 +5,7 @@
   "description": "Serverless extensions and widgets for a low-code field-service app",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "prepare": "git rev-parse --git-dir >/dev/null 2>&1 && git config core.hooksPath .githooks || true",

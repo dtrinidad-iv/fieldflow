@@ -16,7 +16,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    Runtime: nodejs24.x
     Architectures: [arm64]
     Timeout: 10
     MemorySize: 256
@@ -56,7 +56,7 @@ Resources:
         Format: esm
         OutExtension:
           - .js=.mjs
-        Target: es2022
+        Target: node24
         Minify: false
         Sourcemap: true
     Properties:

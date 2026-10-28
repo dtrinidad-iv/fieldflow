@@ -1,7 +1,7 @@
 # FieldFlow
 
 A field-service job tracker built natively on a low-code platform (Tadabase), extended where the platform falls short:
-- AWS Lambda functions (`functions/`, Node 20, AWS SAM)
+- AWS Lambda functions (`functions/`, Node 24, AWS SAM)
 - shared code (`lib/`)
 - vanilla JS/CSS widgets injected into app pages (`widgets/`)
 
