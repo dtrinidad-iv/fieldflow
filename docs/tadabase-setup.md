@@ -57,7 +57,7 @@ code use. The **Type** column is the Tadabase field type to pick.
 | Field | Logical name | Type |
 |---|---|---|
 | Job | `job` | Connection → Jobs |
-| Number | `number` | Text (or Auto Increment) |
+| Number | `number` | Text (filled in by the invoice function: `INV-<job id>`) |
 | Issued Date | `issuedDate` | Date |
 | Amount | `amount` | Currency |
 | PDF | `pdfLink` | Link |
@@ -96,6 +96,7 @@ You can add more fields; the code ignores anything it doesn't map.
    done
    unset VALUE
    aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/webhook-secret" --value "$(openssl rand -hex 32)"
+   aws ssm put-parameter --type SecureString --name "/fieldflow/$STAGE/link-secret"    --value "$(openssl rand -hex 32)"
    ```
 
    Don't add `--key-id`: the default `aws/ssm` key needs no extra permission, while a
@@ -137,6 +138,34 @@ Each later plan adds its own webhook; they all follow this pattern. In the build
   request without it (401).
 - **Body:** a custom JSON template with the record id and the fields the plan lists, for example
   `{"recordId": "{record_id}", "status": "{field_NN}"}`.
+
+## 7. Invoices (plan 04)
+When a job is marked **Completed**, a function renders its PDF invoice, stores it privately in
+AWS, and creates the Invoices record with the amount and a link to the PDF. It runs once per job,
+however often the webhook is delivered.
+
+1. **Business details:** fill in `config/invoice.json` (name, address lines, email, currency,
+   locale, and `timeZone`, which dates the invoice) and set `"placeholder": false`. The function
+   refuses to invoice until you do. Prices must be plain amounts like `1234.50` (US format, at most
+   2 decimals); anything else is refused rather than guessed.
+2. **Record rule:** on Invoices, when a record is created, set its connected Job's Status to
+   `Invoiced`.
+3. **Outgoing webhook** (after the deploy, plan 08):
+   - Table: Jobs. Trigger: On record update. Filter: Status is `Completed`.
+   - `POST` to the `JobCompletedWebhookUrl` stack output.
+   - Header `X-FieldFlow-Secret: <webhook-secret>`.
+   - Body: `{"recordId": "{record_id}"}`.
+4. **Links:** the PDF link in each invoice is signed with `link-secret`. Anyone with the link can
+   open that one PDF; rotating `link-secret` makes every existing link stop working.
+
+The function answers:
+- `201` when it created the invoice
+- `200` when the invoice already exists, or the job isn't Completed (nothing happens)
+- `409` when another delivery for the same job is still running
+- `422` when the job has no customer, no line items, an amount it can't read, or a Total that
+  differs from its line items. Fix the job and save it again.
+- `503` or `5xx` when it ran out of time or the app didn't answer: nothing is lost, and a retry (or
+  saving the job again) finishes it, never creating a second invoice.
 
 ## What stays custom
 | Need | Why the platform can't do it natively | Plan |
