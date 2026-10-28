@@ -1,7 +1,7 @@
 // POST /webhooks/job-schedule: Tadabase calls this when a job is created, updated or deleted
 // (webhook body: {"recordId": "{record_id}"}). It flags double-booked jobs (same technician, date
 // and slot; see lib/schedule.js) in their Schedule Conflict field, and clears flags that no longer
-// apply. Forms block most double bookings natively; this catches the rest (board drags, inline
+// apply. Forms block most double bookings natively; this catches the rest (inline
 // edits, imports, the API). It can't block a save, only flag it.
 //
 // Idempotent by construction, so no idempotency claim: every flag is computed from the current
