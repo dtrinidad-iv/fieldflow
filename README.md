@@ -40,6 +40,15 @@ API (the same one the test suite uses), plus a small server that does what the T
 (fire the webhooks after a change, apply the record rule, compute the formula fields). No accounts,
 no cost, and nothing leaves your machine.
 
+![The FieldFlow demo: a jobs board with Scheduled, In Progress, Completed and Invoiced columns. A job that was double-booked and then completed without line items is open in the side panel, showing its Schedule Conflict and Invoice Problem, the signature pad, and below, the log of webhooks and what each function answered.](docs/screenshots/demo-board.png)
+
+*Above: Alex is double-booked on Thursday morning (flagged by `check-schedule`), the job without
+line items was sent back by `generate-invoice`, and Harbor Cafe's job was invoiced. The log at the
+bottom shows each webhook and what the function answered. Below: the PDF that `generate-invoice`
+rendered for it, opened through its signed link.*
+
+<img src="docs/screenshots/demo-invoice.png" alt="The generated invoice PDF: Northwind Field Services, invoice INV-job2 for Harbor Cafe, one Boiler service line at $120.00, total $120.00." width="520">
+
 What to try:
 1. **Drag** a job between Scheduled and In Progress. Completed and Invoiced are locked, as on the
    real board.
