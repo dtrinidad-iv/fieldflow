@@ -19,7 +19,7 @@ region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
 confirm_changeset = true
-parameter_overrides = "Stage=dev"
+parameter_overrides = "Stage=dev AllowLiveWrites=true"
 
 [dev.deploy.parameters]
 stack_name = "fieldflow-dev"
@@ -27,7 +27,7 @@ region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
 confirm_changeset = true
-parameter_overrides = "Stage=dev"
+parameter_overrides = "Stage=dev AllowLiveWrites=true"
 
 [prod.deploy.parameters]
 stack_name = "fieldflow-prod"
@@ -35,4 +35,4 @@ region = "us-east-1"
 capabilities = "CAPABILITY_IAM"
 resolve_s3 = true
 confirm_changeset = true
-parameter_overrides = "Stage=prod"
+parameter_overrides = "Stage=prod AllowLiveWrites=true"

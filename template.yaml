@@ -13,6 +13,14 @@ Parameters:
     Type: String
     AllowedValues: [dev, prod]
     Default: dev
+  # Set per stage in samconfig.toml. Each stage talks to its own Tadabase app (dev is a copy of
+  # prod), so both allow writes; 'false' makes a stack read-only.
+  AllowLiveWrites:
+    Type: String
+    AllowedValues: ['true', 'false']
+
+Conditions:
+  LiveWrites: !Equals [!Ref AllowLiveWrites, 'true']
 
 Globals:
   Function:
@@ -23,8 +31,8 @@ Globals:
     Environment:
       Variables:
         STAGE: !Ref Stage
-        # The deployed stack is the only place live Tadabase writes are allowed.
-        FIELDFLOW_ALLOW_LIVE_WRITES: '1'
+        # The deployed stack is the only place live Tadabase writes can be allowed.
+        FIELDFLOW_ALLOW_LIVE_WRITES: !If [LiveWrites, '1', '0']
         NODE_OPTIONS: --enable-source-maps
 
 Resources:

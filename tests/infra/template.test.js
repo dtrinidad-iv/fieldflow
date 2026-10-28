@@ -143,8 +143,11 @@ describe('template.yaml: runtime limits', () => {
     }
   });
 
-  it('allows live Tadabase writes only through the deployed stack environment', () => {
-    expect(globals.Environment.Variables.FIELDFLOW_ALLOW_LIVE_WRITES).toBe('1');
+  it('turns live Tadabase writes on only through the AllowLiveWrites stack parameter', () => {
+    expect(template.Parameters.AllowLiveWrites).toMatchObject({ Type: 'String', AllowedValues: ['true', 'false'] });
+    expect(template.Parameters.AllowLiveWrites.Default).toBeUndefined(); // every stage must choose
+    expect(template.Conditions.LiveWrites).toEqual({ 'Fn::Equals': [{ Ref: 'AllowLiveWrites' }, 'true'] });
+    expect(globals.Environment.Variables.FIELDFLOW_ALLOW_LIVE_WRITES).toEqual({ 'Fn::If': ['LiveWrites', '1', '0'] });
   });
 });
 
@@ -167,9 +170,10 @@ describe('samconfig.toml', () => {
     expect(body).not.toMatch(/confirm_changeset\s*=\s*false|no_confirm_changeset|force_upload\s*=\s*true/);
   });
 
-  it.each(deploySections)('[%s] deploys the matching stage and stack', (name, body) => {
+  // Each stage talks to its own Tadabase app (plan 03, option A), so both allow writes.
+  it.each(deploySections)('[%s] deploys the matching stage and stack, and chooses live writes', (name, body) => {
     const env = name.split('.')[0] === 'default' ? 'dev' : name.split('.')[0];
-    expect(body).toContain(`parameter_overrides = "Stage=${env}"`);
+    expect(body).toContain(`parameter_overrides = "Stage=${env} AllowLiveWrites=true"`);
     expect(body).toContain(`stack_name = "fieldflow-${env}"`);
   });
 });
