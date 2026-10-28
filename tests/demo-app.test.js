@@ -35,6 +35,7 @@ beforeAll(async () => {
   }));
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => state })));
   document.documentElement.innerHTML = new DOMParser().parseFromString(html, 'text/html').documentElement.innerHTML;
+  window.location.hash = '#job2'; // the page opens the job named in the hash
   await import('../widgets/signature-pad.js');
   await import('../widgets/line-total.js');
   await import('../demo/app.js');
@@ -42,6 +43,13 @@ beforeAll(async () => {
 });
 
 describe('demo page', () => {
+  it('opens the job named in the URL hash', () => {
+    expect(document.querySelector('#panel h2').textContent).toBe('Annual boiler service');
+    // Optional parts that are absent (no flags, no invoice) leave nothing behind.
+    expect(document.getElementById('panel').textContent).not.toMatch(/undefined|false|null/);
+    expect(document.querySelector('.card[data-id="job2"]').classList.contains('selected')).toBe(true);
+  });
+
   it('shows the four status columns, with Completed and Invoiced locked', () => {
     const columns = [...document.querySelectorAll('.column')];
     expect(columns.map((c) => c.dataset.status)).toEqual(['Scheduled', 'In Progress', 'Completed', 'Invoiced']);

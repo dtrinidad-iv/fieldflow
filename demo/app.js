@@ -207,7 +207,9 @@
     }
     const open = OPEN.includes(job.status);
     const link = job.invoice && localLink(job.invoice.link);
-    node.replaceChildren(
+    // Optional parts are `cond && el(...)`: drop the false/empty ones, which replaceChildren would
+    // otherwise print as text ("undefined").
+    node.replaceChildren(...[
       el('div', { class: 'panel-head' },
         el('h2', {}, job.title),
         el('span', { class: `status s-${job.status.replace(' ', '-').toLowerCase()}` }, job.status)),
@@ -220,7 +222,7 @@
       open && el('h3', {}, 'Booking'), open && bookingForm(job),
       el('h3', {}, 'Line items'), itemsTable(job), open && itemForm(job),
       open && el('h3', {}, 'Complete job'), open && completeForm(job, keep),
-    );
+    ].filter((part) => part instanceof Node));
   }
 
   function logList() {
@@ -253,6 +255,9 @@
     });
     try {
       state = await api('GET', '/api/state');
+      // A link like http://127.0.0.1:5173/#job3 opens that job's panel.
+      const fromHash = window.location.hash.slice(1);
+      if (state.jobs.some((j) => j.id === fromHash)) selectedId = fromHash;
       render();
     } catch (err) {
       document.getElementById('board').replaceChildren(el('p', { class: 'empty-state' }, `Couldn't load the demo: ${err.message}`));
