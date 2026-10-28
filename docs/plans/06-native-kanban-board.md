@@ -8,13 +8,19 @@ A board of jobs in columns by Status, where dragging a card moves the job to tha
 the office (every job) and, optionally, for each technician (their own jobs).
 
 **This is now native.** The roadmap planned a custom widget plus a proxy Lambda, on the
-assumption that Tadabase had no kanban with drag-to-update. It does: the Kanban component shows
-records as cards in columns by a dropdown field, and dragging a card updates that field, respects
-permissions, and runs record rules
+assumption that Tadabase had no kanban with drag-to-update. Tadabase's docs say it has one: the
+Kanban component shows records as cards in columns by a dropdown field, and dragging a card updates
+that field, respects permissions, and runs record rules
 ([docs](https://docs.tadabase.io/onboarding/article/2207---advanced-components)). Its forum said
 drag was unreleased as of May 2025
-([thread](https://community.tadabase.io/t/kanban-drag-drop-functionality/2390)). The user checked
-the dev app on 2026-10-28: dragging works.
+([thread](https://community.tadabase.io/t/kanban-drag-drop-functionality/2390)).
+
+**Not yet confirmed in a live app.** When this plan was written, the answer recorded was that
+dragging worked in the dev app; on 2026-10-28 the user clarified that it hadn't been tested. So this
+plan rests on the docs, and the first live check (setup guide section 9, step 6; go-live row 6)
+decides it. If drag turns out not to work, the user's chosen fallback applies: the native Kanban
+for the view, plus native action links on each card ("Start") to change Status. Still no custom
+code.
 
 So, following "build natively first", this plan writes no Lambda and no widget. It documents the
 native setup, puts guard rails around the two statuses the board must not set casually, and removes

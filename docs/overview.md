@@ -52,9 +52,11 @@ Tadabase's own tables, forms, rules and components, which a team can change with
 | Double booking caught after a drag, inline edit or import | **Code** | Validation rules only run on forms |
 | Unready jobs sent back with the reason | **Code** | Rules can't count a job's items or see a board drag |
 
-The plan originally had a custom drag-and-drop board. Tadabase's Kanban component turned out to do
-it natively, so it was configured instead of built
-([plan 06](plans/06-native-kanban-board.md)). A CRM sync was left out because it wasn't needed
+The plan originally had a custom drag-and-drop board. Tadabase's docs describe a native Kanban
+component with drag-to-update, so the board is configured instead of built
+([plan 06](plans/06-native-kanban-board.md)). That's still to be confirmed in a live app; if drag
+isn't available, native action buttons on each card change the status instead, still with no
+custom code. A CRM sync was left out because it wasn't needed
 yet; its design is kept in [plan 07](plans/07-job-checks.md#follow-ups).
 
 ## How the pieces connect
