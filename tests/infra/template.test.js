@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { LEASE_MS } from '../../lib/idempotency.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -36,7 +37,7 @@ const STATELESS_TYPES = [
   'AWS::Serverless::Function', 'AWS::Serverless::HttpApi', 'AWS::Serverless::Api', 'AWS::Serverless::LayerVersion',
   'AWS::Lambda::Function', 'AWS::Lambda::Permission', 'AWS::Lambda::LayerVersion', 'AWS::IAM::Role',
   'AWS::IAM::Policy', 'AWS::IAM::ManagedPolicy', 'AWS::Events::Rule', 'AWS::Scheduler::Schedule',
-  'AWS::CloudWatch::Alarm', 'AWS::SNS::Topic', 'AWS::SNS::Subscription',
+  'AWS::CloudWatch::Alarm', 'AWS::SNS::Topic', 'AWS::SNS::Subscription', 'AWS::S3::BucketPolicy',
 ];
 
 // Every stateful resource, pinned with the properties that force a replacement. The file is
@@ -53,13 +54,19 @@ describe('template.yaml: data safety', () => {
   it.each(Object.entries(PINNED))('still has %s with the same type and replacement-forcing properties', (id, pin) => {
     expect(template.Resources[id]?.Type).toBe(pin.Type);
     for (const [prop, value] of Object.entries(pin.Replacement)) {
-      expect(template.Resources[id].Properties?.[prop], `${id}.${prop}`).toEqual(value);
+      // null: the property must stay unset (setting one, like BucketName, replaces the resource).
+      expect(template.Resources[id].Properties?.[prop], `${id}.${prop}`).toEqual(value === null ? undefined : value);
     }
   });
 
   it('pins every stateful resource, so a rename or removal is caught', () => {
     const stateful = ofType(...STATEFUL_TYPES).map(([id]) => id).sort();
-    expect(stateful).toEqual(Object.keys(PINNED).sort());
+    const pinnedStateful = Object.entries(PINNED).filter(([, pin]) => STATEFUL_TYPES.includes(pin.Type)).map(([id]) => id);
+    expect(stateful).toEqual(pinnedStateful.sort());
+  });
+
+  it('pins the HTTP API, whose id is part of every stored invoice link', () => {
+    expect(PINNED.HttpApi?.Type).toBe('AWS::Serverless::HttpApi');
   });
 
   it('knows whether every resource type holds data', () => {
@@ -111,6 +118,67 @@ describe('template.yaml: IAM and secrets', () => {
         expect(p.Default, name).toBeUndefined();
       }
     }
+  });
+});
+
+describe('template.yaml: function roles', () => {
+  const functions = ofType('AWS::Serverless::Function');
+  const roleOf = (fn) => fn.Properties.Role?.['Fn::GetAtt']?.[0];
+  const statementsOf = (roleId) => template.Resources[roleId].Properties.Policies.flatMap((p) => p.PolicyDocument.Statement);
+
+  it.each(functions)('%s has its own explicit role (no SAM-generated role with managed policies)', (id, fn) => {
+    const roleId = roleOf(fn);
+    expect(template.Resources[roleId]?.Type, id).toBe('AWS::IAM::Role');
+    expect(fn.Properties.Policies, id).toBeUndefined();
+    const others = functions.filter(([otherId, other]) => otherId !== id && roleOf(other) === roleId);
+    expect(others.map(([otherId]) => otherId), `${id} shares its role`).toEqual([]);
+  });
+
+  it.each(functions)('%s may write logs only to its own log group', (id, fn) => {
+    const logGroup = fn.Properties.LoggingConfig.LogGroup.Ref;
+    const logStatements = statementsOf(roleOf(fn)).filter((s) => [s.Action].flat().some((a) => a.startsWith('logs:')));
+    expect(logStatements).toHaveLength(1);
+    expect([logStatements[0].Action].flat().sort()).toEqual(['logs:CreateLogStream', 'logs:PutLogEvents']);
+    expect(logStatements[0].Resource['Fn::Sub'].endsWith(`:log-group:\${${logGroup}}:log-stream:*`), id).toBe(true);
+  });
+
+  it.each(functions)('%s bundles everything except the AWS SDK clients that ship in the runtime', (id, fn) => {
+    for (const ext of fn.Metadata.BuildProperties.External ?? []) expect(ext, id).toMatch(/^@aws-sdk\/client-[a-z0-9-]+$/);
+  });
+});
+
+describe('template.yaml: storage', () => {
+  it.each(ofType('AWS::S3::Bucket'))('%s is private, versioned, encrypted and TLS-only', (id, bucket) => {
+    const p = bucket.Properties;
+    expect(p.VersioningConfiguration).toEqual({ Status: 'Enabled' });
+    expect(p.BucketEncryption.ServerSideEncryptionConfiguration[0].ServerSideEncryptionByDefault.SSEAlgorithm).toMatch(/AES256|aws:kms/);
+    expect(p.PublicAccessBlockConfiguration).toEqual({
+      BlockPublicAcls: true, BlockPublicPolicy: true, IgnorePublicAcls: true, RestrictPublicBuckets: true,
+    });
+    expect(p.OwnershipControls.Rules[0].ObjectOwnership).toBe('BucketOwnerEnforced');
+    const policy = ofType('AWS::S3::BucketPolicy').find(([, bp]) => bp.Properties.Bucket.Ref === id);
+    expect(policy, `${id} needs a bucket policy`).toBeDefined();
+    expect(policy[1].Properties.PolicyDocument.Statement).toContainEqual(
+      expect.objectContaining({ Effect: 'Deny', Condition: { Bool: { 'aws:SecureTransport': 'false' } } }),
+    );
+  });
+
+  it.each(ofType('AWS::DynamoDB::Table'))('%s expires items, has point-in-time recovery and deletion protection', (_, table) => {
+    expect(table.Properties.TimeToLiveSpecification.Enabled).toBe(true);
+    expect(table.Properties.PointInTimeRecoverySpecification.PointInTimeRecoveryEnabled).toBe(true);
+    expect(table.Properties.DeletionProtectionEnabled).toBe(true);
+    expect(table.Properties.BillingMode).toBe('PAY_PER_REQUEST');
+  });
+
+  it('keeps every version of every invoice (financial records)', () => {
+    const rules = template.Resources.InvoicesBucket.Properties.LifecycleConfiguration?.Rules ?? [];
+    expect(rules.filter((r) => r.Expiration || r.NoncurrentVersionExpiration)).toEqual([]);
+  });
+
+  it('keeps the idempotency lease longer than the invoice function can run', () => {
+    const timeoutMs = (template.Resources.GenerateInvoiceFunction.Properties.Timeout ?? template.Globals.Function.Timeout) * 1000;
+    expect(timeoutMs).toBeLessThan(LEASE_MS);
+    expect(timeoutMs).toBeLessThanOrEqual(29_000); // API Gateway HTTP API integration limit: 30 s
   });
 });
 

@@ -71,6 +71,7 @@ Resources:
       Description: GET /health - smoke-test target for deploys
       CodeUri: ./
       Handler: handler.handler
+      Role: !GetAtt HealthRole.Arn
       LoggingConfig:
         LogFormat: JSON
         LogGroup: !Ref HealthLogGroup
@@ -90,7 +91,247 @@ Resources:
       LogGroupName: !Sub /fieldflow/${Stage}/health
       RetentionInDays: 30
 
+  # Every function has its own role: log writes to its own log group, plus exactly what its code
+  # calls, on exact resources.
+  HealthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: logs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${HealthLogGroup}:log-stream:*
+
+  # --- Invoices (plan 04) --------------------------------------------------------------------
+  InvoicesBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      # No lifecycle rule: invoices are financial records, so every version is kept.
+
+  InvoicesBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref InvoicesBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt InvoicesBucket.Arn
+              - !Sub ${InvoicesBucket.Arn}/*
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  IdempotencyTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: key
+          AttributeType: S
+      KeySchema:
+        - AttributeName: key
+          KeyType: HASH
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      DeletionProtectionEnabled: true
+
+  GenerateInvoiceFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - functions/generate-invoice/handler.js
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: node24
+        Minify: false
+        Sourcemap: true
+        External:
+          - '@aws-sdk/client-s3'
+          - '@aws-sdk/client-dynamodb'
+          - '@aws-sdk/client-ssm'
+    Properties:
+      Description: POST /webhooks/job-completed - renders and stores the job's invoice, exactly once
+      CodeUri: ./
+      Handler: handler.handler
+      MemorySize: 512
+      # Several Tadabase calls (5 s timeout each), SSM, DynamoDB, PDF rendering and S3 in one run.
+      # Under API Gateway's 30 s limit, and under the idempotency lease (lib/idempotency.js).
+      Timeout: 25
+      Role: !GetAtt GenerateInvoiceRole.Arn
+      Environment:
+        Variables:
+          INVOICES_BUCKET: !Ref InvoicesBucket
+          IDEMPOTENCY_TABLE: !Ref IdempotencyTable
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref GenerateInvoiceLogGroup
+      Events:
+        JobCompleted:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /webhooks/job-completed
+
+  GenerateInvoiceLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub /fieldflow/${Stage}/generate-invoice
+      RetentionInDays: 30
+
+  GenerateInvoiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: generate-invoice
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${GenerateInvoiceLogGroup}:log-stream:*
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub ${InvoicesBucket.Arn}/invoices/*
+              - Effect: Allow
+                Action: [dynamodb:PutItem, dynamodb:GetItem, dynamodb:DeleteItem]
+                Resource: !GetAtt IdempotencyTable.Arn
+              - Effect: Allow
+                Action: ssm:GetParameters
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/tadabase/app-id
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/tadabase/app-key
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/tadabase/app-secret
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/webhook-secret
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/link-secret
+
+  InvoicePdfFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - functions/invoice-pdf/handler.js
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: node24
+        Minify: false
+        Sourcemap: true
+        External:
+          - '@aws-sdk/client-s3'
+          - '@aws-sdk/client-dynamodb'
+          - '@aws-sdk/client-ssm'
+    Properties:
+      Description: GET /invoices/{jobId}.pdf - checks the signed link, returns the PDF
+      CodeUri: ./
+      Handler: handler.handler
+      Role: !GetAtt InvoicePdfRole.Arn
+      Environment:
+        Variables:
+          INVOICES_BUCKET: !Ref InvoicesBucket
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref InvoicePdfLogGroup
+      Events:
+        InvoicePdf:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /invoices/{file}
+
+  InvoicePdfLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub /fieldflow/${Stage}/invoice-pdf
+      RetentionInDays: 30
+
+  InvoicePdfRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: invoice-pdf
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${InvoicePdfLogGroup}:log-stream:*
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub ${InvoicesBucket.Arn}/invoices/*
+              # Without ListBucket, S3 answers GetObject on a missing key with 403 instead of
+              # 404. (A prefix condition wouldn't help: GetObject has no s3:prefix key.) The
+              # bucket only holds invoices.
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt InvoicesBucket.Arn
+              - Effect: Allow
+                Action: ssm:GetParameters
+                Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/link-secret
+
 Outputs:
   ApiUrl:
     Description: Base URL of the HTTP API
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}
+  JobCompletedWebhookUrl:
+    Description: URL for the Tadabase "job completed" outgoing webhook
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/webhooks/job-completed
+  InvoicesBucketName:
+    Description: Private bucket holding the invoice PDFs
+    Value: !Ref InvoicesBucket

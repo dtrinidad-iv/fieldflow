@@ -1,6 +1,11 @@
 {
-  "_comment": "Append-only. Every stateful resource in template.yaml, with the properties whose change makes CloudFormation replace it (and lose its data). Removing or changing an entry needs the user's approval: the protect-files hook asks before any edit to this file.",
+  "_comment": "Append-only. Every stateful resource in template.yaml, with the properties whose change makes CloudFormation replace it (and lose its data). null means the property must stay unset (setting it, e.g. a BucketName, replaces the resource). Removing or changing an entry needs the user's approval: the protect-files hook asks before any edit to this file.",
   "resources": {
+    "HttpApi": {
+      "Type": "AWS::Serverless::HttpApi",
+      "Why": "Not data, but an identity: every invoice's PDF link stored in Tadabase contains this API's id. Replacing the API breaks them all.",
+      "Replacement": {}
+    },
     "HttpApiAccessLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/http-api-access" } }
@@ -8,6 +13,25 @@
     "HealthLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/health" } }
+    },
+    "InvoicesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Replacement": { "BucketName": null }
+    },
+    "IdempotencyTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Replacement": {
+        "TableName": null,
+        "KeySchema": [{ "AttributeName": "key", "KeyType": "HASH" }]
+      }
+    },
+    "GenerateInvoiceLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/generate-invoice" } }
+    },
+    "InvoicePdfLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/invoice-pdf" } }
     }
   }
 }
