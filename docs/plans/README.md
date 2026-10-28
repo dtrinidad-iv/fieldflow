@@ -9,7 +9,7 @@ One file per task: `NN-task-name.md`, numbered in order. Each starts with a **St
 | # | Plan | Status |
 |---|---|---|
 | 01 | [Claude Code safety tooling](01-claude-code-safety-tooling.md) | Done |
-| 02 | Scaffold: SAM template, platform adapters, shared lib | Planned |
+| 02 | [Scaffold: SAM template, platform adapters, shared lib](02-scaffold-sam-adapters-lib.md) | Done |
 | 03 | Tadabase setup guide and live adapter wiring | Planned |
 | 04 | Generate invoice Lambda | Planned |
 | 05 | Signature pad and live total widgets, demo page | Planned |
