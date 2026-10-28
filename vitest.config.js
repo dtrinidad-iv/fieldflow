@@ -22,6 +22,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['functions/**/*.js', 'lib/**/*.js', 'widgets/**/*.js'],
+      exclude: ['tests/**'],
       thresholds: { lines: 80, functions: 80, branches: 75, statements: 80 },
     },
   },
