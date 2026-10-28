@@ -20,15 +20,18 @@ The guiding rule: **build natively first; write code only when the platform can'
   2. Validate input
   3. Do the work through the adapter
   4. Return JSON
-- Handlers are idempotent: a retried webhook never duplicates a side effect.
+- Handlers are idempotent: a retried webhook never duplicates a side effect. Use `withIdempotency` (`lib/idempotency.js`, DynamoDB `IdempotencyTable`) around the side effects, and also check the platform for an existing result (for example, an invoice already connected to the job) as a safety net. Store only final answers (`store: true`). Mark an error `keepClaim` once a side effect may have happened, and keep each function's `Timeout` below `LEASE_MS`.
 - Shared code in `lib/`:
   - `http.js`: `wrap` (every handler), `json`, `parseJsonBody`
   - `errors.js`: throw `badRequest` / `unauthorized`, ...; adapters throw `PlatformError`
   - `webhook.js`: `verifySecret`
   - `validate.js`, `log.js` (redacts secrets), `config.js`
   - `schema.js`: table ids and field slugs from `config/tadabase.<stage>.json`, under logical names (`jobs.status`). Use `toLogical` / `toSlugs`; never write a `field_NN` in a handler. `REQUIRED_FIELDS` lists every mapped field, matching `docs/tadabase-setup.md`.
-  - `secrets.js`, `runtime.js`: SSM secrets and the per-container runtime
+  - `secrets.js`, `runtime.js`: SSM secrets and the per-container runtime. Load only the secrets a function's role allows (`createSecretLoader({ keys })`).
+  - `aws.js`: lazy S3 / DynamoDB clients from the Lambda runtime SDK, with timeouts
+  - `invoice.js` (strict money parsing, integer cents), `pdf.js` (pdf-lib), `links.js` (signed, versioned invoice links)
   - `platform/`: the adapter interface (`index.js`), `memory.js`, `tadabase.js`. Adapter behavior is pinned by `tests/lib/platform/contract.test.js`, run against both.
+- Production dependency: `pdf-lib`, bundled. The SDK clients (`@aws-sdk/client-*`) are not dependencies: they're `External` in each function's build and come from the runtime. Never bundle an SDK helper that takes a runtime client (version drift).
 - New stateful resources in `template.yaml` get `DeletionPolicy: RetainExceptOnCreate` (or `Retain`), `UpdateReplacePolicy: Retain`, and an entry in `tests/infra/stateful-resources.json` with their replacement-forcing properties. That file is append-only, and editing it needs the user's approval.
 - Widgets: no secrets, no `innerHTML` with data, safe to mount twice, visible loading/empty/error states.
 - Commits: `type(scope): summary`, with scopes `functions`, `widgets`, `infra`, `claude`, `docs`.
@@ -48,7 +51,7 @@ The guiding rule: **build natively first; write code only when the platform can'
 
 **Secrets**
 - `.env*` (except `.env.example`), `.envrc`, `env.json`, keys and credential stores (`~/.aws`, `~/.ssh`, ...) are never read, searched or written.
-- Secrets live in SSM Parameter Store in AWS, as SecureStrings under `/fieldflow/<stage>/` (`tadabase/app-id`, `tadabase/app-key`, `tadabase/app-secret`, `webhook-secret`). The user creates them (docs/tadabase-setup.md, step 4).
+- Secrets live in SSM Parameter Store in AWS, as SecureStrings under `/fieldflow/<stage>/` (`tadabase/app-id`, `tadabase/app-key`, `tadabase/app-secret`, `webhook-secret`, `link-secret`). The user creates them (docs/tadabase-setup.md, step 4).
 - Each stage has its own Tadabase app (dev is a copy of prod), with its own keys and mapping file.
 - The pre-commit hook (`.githooks/`, installed by `npm install`) runs the secret scan, lint and tests.
 

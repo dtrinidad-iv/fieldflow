@@ -1,0 +1,13 @@
+{
+  "_comment": "Your business details, printed on every invoice. PLACEHOLDER until filled in: set placeholder to false. timeZone (IANA, e.g. America/New_York) dates the invoice. Not secret.",
+  "placeholder": true,
+  "name": "Your Business Name",
+  "addressLines": [
+    "123 Main St",
+    "Springfield, ST 00000"
+  ],
+  "email": "billing@example.com",
+  "currency": "USD",
+  "locale": "en-US",
+  "timeZone": "America/New_York"
+}

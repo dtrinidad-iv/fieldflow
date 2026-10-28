@@ -6,6 +6,7 @@ const values = {
   '/fieldflow/dev/tadabase/app-key': 'test-app-key',
   '/fieldflow/dev/tadabase/app-secret': 'test-app-secret',
   '/fieldflow/dev/webhook-secret': 'test-webhook-secret',
+  '/fieldflow/dev/link-secret': 'test-link-secret',
 };
 const ssm = (store = values) =>
   vi.fn((names) =>
@@ -16,7 +17,7 @@ const ssm = (store = values) =>
   );
 
 describe('secrets', () => {
-  it('loads all four parameters for the stage in one call', async () => {
+  it('loads all five parameters for the stage in one call', async () => {
     const getParameters = ssm();
     const secrets = await createSecretLoader({ stage: 'dev', getParameters }).load();
     expect(getParameters).toHaveBeenCalledTimes(1);
@@ -24,7 +25,16 @@ describe('secrets', () => {
     expect(secrets).toEqual({
       tadabase: { appId: 'test-app-id', appKey: 'test-app-key', appSecret: 'test-app-secret' },
       webhookSecret: 'test-webhook-secret',
+      linkSecret: 'test-link-secret',
     });
+  });
+
+  it('loads only the requested secrets, so a narrowly scoped role is enough', async () => {
+    const getParameters = ssm();
+    const secrets = await createSecretLoader({ stage: 'dev', keys: ['linkSecret'], getParameters }).load();
+    expect(getParameters.mock.calls[0][0]).toEqual(['/fieldflow/dev/link-secret']);
+    expect(secrets).toEqual({ linkSecret: 'test-link-secret' });
+    expect(() => createSecretLoader({ stage: 'dev', keys: ['__proto__'] })).toThrow(/unknown secret/);
   });
 
   it('uses per-stage names', () => {

@@ -42,6 +42,10 @@ export default [
   {
     files: ['tests/**/*.js'],
     languageOptions: { globals: { ...globals.node, ...globals.browser } },
-    rules: { 'security/detect-non-literal-fs-filename': 'off', 'security/detect-object-injection': 'off' },
+    rules: {
+      'security/detect-non-literal-fs-filename': 'off',
+      'security/detect-object-injection': 'off',
+      'require-await': 'off', // async stubs (`async () => value`) stand in for real async calls
+    },
   },
 ];
