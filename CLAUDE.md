@@ -14,7 +14,7 @@ The guiding rule: **build natively first; write code only when the platform can'
 - `npm run build`: runs `sam build`, which bundles each function with esbuild (`Metadata: BuildMethod: esbuild`, `CodeUri: ./`, one entry point per function). Use the npm script, not plain `sam build`: SAM needs esbuild on the PATH, and npm adds the pinned one from `node_modules/.bin`. Needs the SAM CLI.
 
 ## Conventions
-- Handlers export `createHandler({ platform, config })`, so tests inject `lib/platform/memory.js`. Only the exported `handler` wires up the real Tadabase adapter.
+- Handlers export `createHandler({ platform, config })`, so tests inject `lib/platform/memory.js`. Only the exported `handler` wires up the real Tadabase adapter, through `getRuntime()` from `lib/runtime.js` (config, schema, SSM secrets, adapter, logger).
 - Order inside a handler:
   1. Verify the webhook secret (constant-time)
   2. Validate input
@@ -26,6 +26,8 @@ The guiding rule: **build natively first; write code only when the platform can'
   - `errors.js`: throw `badRequest` / `unauthorized`, ...; adapters throw `PlatformError`
   - `webhook.js`: `verifySecret`
   - `validate.js`, `log.js` (redacts secrets), `config.js`
+  - `schema.js`: table ids and field slugs from `config/tadabase.<stage>.json`, under logical names (`jobs.status`). Use `toLogical` / `toSlugs`; never write a `field_NN` in a handler. `REQUIRED_FIELDS` lists every mapped field, matching `docs/tadabase-setup.md`.
+  - `secrets.js`, `runtime.js`: SSM secrets and the per-container runtime
   - `platform/`: the adapter interface (`index.js`), `memory.js`, `tadabase.js`. Adapter behavior is pinned by `tests/lib/platform/contract.test.js`, run against both.
 - New stateful resources in `template.yaml` get `DeletionPolicy: RetainExceptOnCreate` (or `Retain`), `UpdateReplacePolicy: Retain`, and an entry in `tests/infra/stateful-resources.json` with their replacement-forcing properties. That file is append-only, and editing it needs the user's approval.
 - Widgets: no secrets, no `innerHTML` with data, safe to mount twice, visible loading/empty/error states.
@@ -46,7 +48,8 @@ The guiding rule: **build natively first; write code only when the platform can'
 
 **Secrets**
 - `.env*` (except `.env.example`), `.envrc`, `env.json`, keys and credential stores (`~/.aws`, `~/.ssh`, ...) are never read, searched or written.
-- Secrets live in SSM Parameter Store in AWS.
+- Secrets live in SSM Parameter Store in AWS, as SecureStrings under `/fieldflow/<stage>/` (`tadabase/app-id`, `tadabase/app-key`, `tadabase/app-secret`, `webhook-secret`). The user creates them (docs/tadabase-setup.md, step 4).
+- Each stage has its own Tadabase app (dev is a copy of prod), with its own keys and mapping file.
 - The pre-commit hook (`.githooks/`, installed by `npm install`) runs the secret scan, lint and tests.
 
 **Git**
@@ -82,5 +85,6 @@ The guiding rule: **build natively first; write code only when the platform can'
 - Records endpoints:
   - `GET` and `POST` on `/data-tables/{tableId}/records`
   - `GET` and `POST` (update), and `DELETE`, on `/data-tables/{tableId}/records/{recordId}`
-- Field slugs (`field_NN`) come from `GET /data-tables/{tableId}/fields`. Map them in config, never hard-code them in handlers.
-- Outgoing webhooks (Pro plan and up) send record data on create, update and delete, and can be filtered by field values.
+- Field slugs (`field_NN`) come from `GET /data-tables/{tableId}/fields`, tables from `GET /data-tables`. Map them in `config/tadabase.<stage>.json`, never hard-code them in handlers. `scripts/tadabase-check.js` (read-only, run by the user) lists them and checks the mapping.
+- Outgoing webhooks (Pro plan and up) send record data on create, update and delete, and can be filtered by field values. They support custom headers (we send `X-FieldFlow-Secret`) and a custom JSON body with `{record_id}` and `{field_slug}` placeholders.
+- Not yet confirmed against the live app: the exact list/get/fields response keys and the 404 behavior. `scripts/tadabase-check.js` reports them; record the answers here.
