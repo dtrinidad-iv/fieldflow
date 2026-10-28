@@ -11,7 +11,7 @@ The guiding rule: **build natively first; write code only when the platform can'
 - `npm test`: Vitest (handlers, adapters, widgets with jsdom, and the safety hooks)
 - `npm run lint`: ESLint, with the security plugin and the no-innerHTML rule for widgets
 - `.claude/skills/verify/verify.sh`: everything (secret scan, lint, tests with coverage, npm audit, sam validate). Run it before saying a task is done.
-- `sam build`: bundles each function with esbuild (`Metadata: BuildMethod: esbuild`, `CodeUri: ./`, one entry point per function). Needs the SAM CLI.
+- `npm run build`: runs `sam build`, which bundles each function with esbuild (`Metadata: BuildMethod: esbuild`, `CodeUri: ./`, one entry point per function). Use the npm script, not plain `sam build`: SAM needs esbuild on the PATH, and npm adds the pinned one from `node_modules/.bin`. Needs the SAM CLI.
 
 ## Conventions
 - Handlers export `createHandler({ platform, config })`, so tests inject `lib/platform/memory.js`. Only the exported `handler` wires up the real Tadabase adapter.

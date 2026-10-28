@@ -39,7 +39,8 @@ jobs:
         if: hashFiles('template.yaml') != ''
         run: sam validate --lint
       # Builds every function the way a deploy would (esbuild bundles), so a broken build
-      # shows up here instead of during safe-deploy.
+      # shows up here instead of during safe-deploy. Through npm, so SAM finds the
+      # lockfile-pinned esbuild in node_modules/.bin.
       - name: sam build
         if: hashFiles('template.yaml') != ''
-        run: sam build
+        run: npm run build
