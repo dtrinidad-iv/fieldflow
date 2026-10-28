@@ -70,7 +70,9 @@ flowchart LR
 | Kanban board of jobs by status, drag to change status (plan 06) | **Native** | The Kanban component; Completed and Invoiced are guarded so the board can't skip the signature or the invoice |
 | PDF invoice, generated and stored privately | **Custom**, Lambda (plan 04) | No server-side PDF rendering, and no private file storage reachable through the API |
 | Signature capture, and a total that updates while typing | **Custom**, widgets (plan 05) | Native forms have no drawing pad, and totals update only on save |
-| Syncing contacts to a CRM, validating jobs | **Custom**, Lambdas (plan 07) | Needs custom logic and calls to another API |
+| Form checks: required fields, no past dates, positive amounts, no double-booking on the form | **Native** | Form validation rules (plan 07) |
+| Double-booking caught however a job was changed (board, inline edit, import) | **Custom**, Lambda (plan 07) | Validation rules only run on forms; this flags conflicts after the save |
+| Completed jobs that can't be invoiced are sent back with the reason | **Custom**, in the invoice Lambda (plan 07) | Validation rules can't count a job's line items or see a board drag |
 
 ## Features
 
@@ -100,7 +102,7 @@ flowchart LR
   | `200` | Invoice already exists, or the job isn't Completed (nothing done) |
   | `401` | Missing or wrong webhook secret |
   | `409` | Another delivery for the same job is still running; retry later |
-  | `422` | The job can't be invoiced: no customer signature, no customer, no line items, an unreadable amount, or a Total that doesn't match. Fix the job and save it again. |
+  | `422` | The job isn't ready: no customer signature, customer, technician or line items, an unreadable amount, or a Total that doesn't match. The job is **sent back** to In Progress, with the reason in its Invoice Problem field. Fix it and complete it again. |
   | `502` / `503` | The app didn't answer, or time ran out. Nothing is lost: a retry finishes it without making a second invoice. |
 
 ### Invoice links (`functions/invoice-pdf`)
@@ -132,6 +134,16 @@ flowchart LR
 - A stand-in for the Tadabase pages, with fake data, to try both widgets locally. Open the file in
   a browser; no server or app is needed.
 
+### Schedule check (`functions/check-schedule`)
+- Jobs have a **Slot** (Morning, Afternoon, Evening). A technician can't hold two open jobs in the
+  same date and slot.
+- Forms block that natively, before saving. This function catches the rest: on every Jobs create,
+  update or delete (`POST /webhooks/job-schedule`), it re-checks the job's booking and flags every
+  job involved in **Schedule Conflict** ("Double-booked with: ..."). It clears flags that no
+  longer apply, including on the partner of a job that moved or was deleted.
+- It writes a job only when its flag changes, so it needs no idempotency claim, and its own update
+  webhooks stop right there.
+
 ### Health check (`functions/health`)
 - `GET /health` returns `{ ok, stage }`. It has no secret, no data and no platform calls, and is
   used to smoke-test a deploy.
@@ -143,6 +155,7 @@ functions/            One folder per Lambda, each with a handler.js
   health/             GET /health
   generate-invoice/   POST /webhooks/job-completed
   invoice-pdf/        GET /invoices/{jobId}.pdf
+  check-schedule/     POST /webhooks/job-schedule
 lib/                  Shared code, bundled into each function by esbuild
   http.js             wrap() for every handler, json(), parseJsonBody()
   errors.js           HTTP and platform errors, and how they map to responses
@@ -153,6 +166,7 @@ lib/                  Shared code, bundled into each function by esbuild
   runtime.js          Per-container setup: config, schema, secrets, adapter, logger
   idempotency.js      Exactly-once claims (DynamoDB, or in memory for tests)
   invoice.js          Invoice building and strict money parsing (integer cents)
+  schedule.js         Double-booking rules (technician + date + slot)
   pdf.js              PDF rendering (pdf-lib)
   links.js            Signed, versioned invoice links
   aws.js              Lazy S3 and DynamoDB clients from the Lambda runtime SDK
@@ -224,9 +238,13 @@ The full step-by-step guide is **[docs/tadabase-setup.md](docs/tadabase-setup.md
    doesn't depend on AWS, so it can be done before the deploy.
 8. **Add the Kanban board:** a native Kanban component on Jobs, grouped by Status, with Completed
    and Invoiced guarded (setup guide section 9). No code involved.
-9. **After deploying, add the outgoing webhook:** Jobs, on record update, filtered to Status =
-   `Completed`, `POST` to the `JobCompletedWebhookUrl` stack output, with header
-   `X-FieldFlow-Secret: <webhook-secret>` and body `{"recordId": "{record_id}"}`.
+9. **Add the job checks:** form validation rules, including the double-booking rule on
+   Technician + Scheduled Date + Slot (setup guide section 10).
+10. **After deploying, add the outgoing webhooks,** each with header
+    `X-FieldFlow-Secret: <webhook-secret>` and body `{"recordId": "{record_id}"}`:
+    - Jobs, on record update, filtered to Status = `Completed` → the `JobCompletedWebhookUrl`
+      stack output (invoices).
+    - Jobs, on record create, update and delete → `JobScheduleWebhookUrl` (schedule check).
 
 ## Deploying
 
@@ -325,7 +343,7 @@ This repo is built to make mistakes against live data or AWS hard:
 | 04 | Generate invoice Lambda | Done (live test in 08) |
 | 05 | Signature pad and live total widgets, demo page | Done (live check pending) |
 | 06 | Kanban board (native) | Done (live check pending) |
-| 07 | Contact sync and job validation Lambdas | Planned |
+| 07 | Job checks (CRM contact sync moved to later) | WIP |
 | 08 | Deploy, README and walkthrough | Planned |
 
 **Not deployed yet.** The code is complete and tested offline. The first deploy, the live

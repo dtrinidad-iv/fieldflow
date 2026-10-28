@@ -42,6 +42,9 @@ code use. The **Type** column is the Tadabase field type to pick.
 | Status | `status` | Drop Down: `Scheduled`, `In Progress`, `Completed`, `Invoiced` |
 | Signature | `signature` | Long Text (holds the signature image as a data URL) |
 | Total | `total` | Equation / Rollup: sum of its Job Items' Line Total |
+| Slot | `slot` | Drop Down: `Morning`, `Afternoon`, `Evening` (plan 07) |
+| Invoice Problem | `invoiceProblem` | Long Text: why a completed job was sent back (written by the invoice function) |
+| Schedule Conflict | `scheduleConflict` | Text: the jobs this one is double-booked with (written by the schedule check) |
 
 ### Job Items
 | Field | Logical name | Type |
@@ -162,8 +165,10 @@ The function answers:
 - `201` when it created the invoice
 - `200` when the invoice already exists, or the job isn't Completed (nothing happens)
 - `409` when another delivery for the same job is still running
-- `422` when the job has no customer signature (section 8), no customer, no line items, an amount
-  it can't read, or a Total that differs from its line items. Fix the job and save it again.
+- `422` when the job isn't ready: no customer signature (section 8), no customer, no technician, no
+  line items, an amount it can't read, or a Total that differs from its line items. The job is
+  **sent back**: its Status returns to `In Progress` and **Invoice Problem** says why. Fix it and
+  complete the job again. (Invoice Problem is cleared once the job is invoiced.)
 - `503` or `5xx` when it ran out of time or the app didn't answer: nothing is lost, and a retry (or
   saving the job again) finishes it, never creating a second invoice.
 
@@ -247,9 +252,60 @@ record rules applied. No code is involved.
    3. Signed in as a role without permission, cards can't be dragged.
    4. No form or table lets anyone set Status to `Invoiced` by hand.
 
+## 10. Job checks (plan 07)
+Native validation rules stop most bad data at the form. Two small functions cover what a form
+can't see: board drags, inline edits, imports and the API.
+
+1. **Form validation rules** (native; each form's Validation Rules tab):
+   - **Job forms:** Title, Customer, Technician, Scheduled Date and Slot are required. On the
+     form that creates jobs, Scheduled Date can't be before today.
+   - **Job Items forms:** Quantity greater than 0, Unit Price 0 or more.
+   - **No double-booking:** on every form that creates or edits a job, add a rule: Technician
+     *is not unique*, with **Check Additional Fields** set to Scheduled Date and Slot. Message:
+     "This technician is already booked for that slot."
+2. **Show the flags,** read-only everywhere: Invoice Problem and Schedule Conflict on the job
+   details page and on the board's cards. Optionally, an office table of Jobs where either field
+   is not empty.
+3. **Outgoing webhook** (after the deploy, plan 08), using the pattern from section 6:
+   - Table Jobs, on record **create**, **update** and **delete** (one webhook per trigger if the
+     builder needs that).
+   - `POST` to the `JobScheduleWebhookUrl` stack output.
+   - Header `X-FieldFlow-Secret: <webhook-secret>`, body `{"recordId": "{record_id}"}`.
+
+   The function writes a job only when its flag actually changes, so the update webhooks its own
+   writes fire stop there. Completed and Invoiced jobs never count as booked. Two harmless side
+   effects to expect in the webhook log:
+   - When a job is completed, clearing its flag is another update with Status = Completed, so the
+     invoice webhook fires a second time. That delivery gets 409 (the first is still running) or
+     the first one's answer. It never makes a second invoice.
+   - A busy moment (a bulk edit, or one change that touches many jobs) can get 429 or 503
+     answers: the schedule check is throttled and stops itself before its timeout. Every run
+     recomputes the flags from scratch, so the next update of those jobs fixes them.
+4. **Before turning the invoice webhook on** (plan 08): look for Completed jobs with no invoice.
+   The first update to any of them now invoices it or, if it isn't ready, sends it back to
+   In Progress. Invoice or fix them first, or expect them to reappear on the board.
+5. **Check on the dev app:**
+   1. The double-booking rule accepts Scheduled Date and Slot as additional fields, and blocks a
+      second booking of the same technician, date and slot.
+   2. Make a double booking another way (drag, inline edit): within seconds both jobs show
+      Schedule Conflict. Move one to another slot: both flags clear. This proves two API filters
+      the function relies on (a connection field matched by record id, and "contains" on text);
+      if no flag ever appears, report it, since those filters aren't confirmed yet.
+   3. Same again, but clear the conflict by **deleting** one job, then by **changing its
+      technician**: the other job's flag clears.
+   4. Make three or more jobs share one slot (an import is easiest): the flags list at most 5 ids
+      ("... and N more"), and they stop changing after a few seconds. If they keep changing, the
+      field is shortening the text: turn the webhook off and report it.
+   5. Complete a job with no line items: it goes back to In Progress, and Invoice Problem says
+      "Not invoiced: job has no line items. ...". This also proves a Drop Down value written
+      through the API (`In Progress`) is accepted.
+
+   One known race: if someone fixes a job and completes it again within a second or two of being
+   sent back, the first delivery may still send it back. Completing it once more fixes it.
+
 ## What stays custom
 | Need | Why the platform can't do it natively | Plan |
 |---|---|---|
 | PDF invoice generated and stored | No server-side PDF rendering or file storage API | 04 |
 | Signature capture, live total while typing | Native forms have no drawing pad, and totals update only on save | 05 |
-| Sync contacts to a CRM, validate jobs | Needs custom logic and calls to another API | 07 |
+| Double-booking caught on every entry point, unready jobs sent back | Form validation rules only run on forms, and can't count a job's line items | 07 |
