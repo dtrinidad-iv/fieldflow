@@ -202,6 +202,13 @@ describe('template.yaml: runtime limits', () => {
     expect(api.Properties.DefaultRouteSettings.ThrottlingRateLimit).toBeGreaterThan(0);
   });
 
+  it('throttles the self-retriggering schedule check below the default (plan 07)', () => {
+    const { DefaultRouteSettings: base, RouteSettings: routes } = template.Resources.HttpApi.Properties;
+    const route = routes['POST /webhooks/job-schedule'];
+    expect(route.ThrottlingRateLimit).toBeLessThan(base.ThrottlingRateLimit);
+    expect(route.ThrottlingBurstLimit).toBeLessThan(base.ThrottlingBurstLimit);
+  });
+
   it('runs every function on the Node major from package.json engines, built for the same target', () => {
     const { engines } = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
     const major = engines.node.match(/\d+/)[0];

@@ -42,6 +42,13 @@ Resources:
       DefaultRouteSettings:
         ThrottlingBurstLimit: 20
         ThrottlingRateLimit: 10
+      # The schedule check's own writes fire more Jobs webhooks, and a bulk edit fires one per job.
+      # It converges, but cap how fast it can call Tadabase, so it can't crowd out the invoices.
+      # (A throttle, not reserved concurrency: reserving fails on accounts with a low limit.)
+      RouteSettings:
+        POST /webhooks/job-schedule:
+          ThrottlingBurstLimit: 5
+          ThrottlingRateLimit: 2
       AccessLogSettings:
         DestinationArn: !GetAtt HttpApiAccessLogGroup.Arn
         Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latencyMs":"$context.responseLatency"}'
@@ -325,6 +332,79 @@ Resources:
                 Action: ssm:GetParameters
                 Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/link-secret
 
+  # --- Job checks (plan 07) ------------------------------------------------------------------
+  CheckScheduleFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - functions/check-schedule/handler.js
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: node24
+        Minify: false
+        Sourcemap: true
+        External:
+          - '@aws-sdk/client-s3'
+          - '@aws-sdk/client-dynamodb'
+          - '@aws-sdk/client-ssm'
+    Properties:
+      Description: POST /webhooks/job-schedule - flags double-booked jobs, clears stale flags
+      CodeUri: ./
+      Handler: handler.handler
+      # A few Tadabase reads (at most 5 technicians' job lists) and up to 25 conditional writes.
+      # The handler stops itself with 6 s to spare (503, safe to retry: every write is recomputed
+      # state). Under API Gateway's 30 s limit. No idempotency claim, so no lease to stay under.
+      Timeout: 25
+      MemorySize: 256
+      Role: !GetAtt CheckScheduleRole.Arn
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref CheckScheduleLogGroup
+      Events:
+        JobSchedule:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: POST
+            Path: /webhooks/job-schedule
+
+  CheckScheduleLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub /fieldflow/${Stage}/check-schedule
+      RetentionInDays: 30
+
+  CheckScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: check-schedule
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:${CheckScheduleLogGroup}:log-stream:*
+              # Exactly the secrets the handler loads (SECRET_KEYS); no link secret.
+              - Effect: Allow
+                Action: ssm:GetParameters
+                Resource:
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/tadabase/app-id
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/tadabase/app-key
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/tadabase/app-secret
+                  - !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fieldflow/${Stage}/webhook-secret
+
 Outputs:
   ApiUrl:
     Description: Base URL of the HTTP API
@@ -332,6 +412,9 @@ Outputs:
   JobCompletedWebhookUrl:
     Description: URL for the Tadabase "job completed" outgoing webhook
     Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/webhooks/job-completed
+  JobScheduleWebhookUrl:
+    Description: URL for the Tadabase Jobs create/update/delete outgoing webhook (schedule check)
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/webhooks/job-schedule
   InvoicesBucketName:
     Description: Private bucket holding the invoice PDFs
     Value: !Ref InvoicesBucket

@@ -32,6 +32,10 @@
     "InvoicePdfLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/invoice-pdf" } }
+    },
+    "CheckScheduleLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/check-schedule" } }
     }
   }
 }
