@@ -318,7 +318,7 @@ This repo is built to make mistakes against live data or AWS hard:
 | 02 | Scaffold: SAM template, platform adapters, shared lib | Done |
 | 03 | Tadabase setup guide and live adapter wiring | Done (live check pending) |
 | 04 | Generate invoice Lambda | Done (live test in 08) |
-| 05 | Signature pad and live total widgets, demo page | Planned |
+| 05 | Signature pad and live total widgets, demo page | Done (live check pending) |
 | 06 | Kanban board widget and proxy Lambda | Planned |
 | 07 | Contact sync and job validation Lambdas | Planned |
 | 08 | Deploy, README and walkthrough | Planned |
