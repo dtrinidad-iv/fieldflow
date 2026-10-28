@@ -1,0 +1,25 @@
+/* FieldFlow live line total. Paste into the app's CSS settings. */
+.ff-total {
+  margin: 6px 0;
+}
+
+.ff-total-empty {
+  display: none;
+}
+
+.ff-total-output {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f2933;
+}
+
+.ff-total-hint .ff-total-output {
+  font-weight: 400;
+  color: #9a5b00;
+}
+
+.ff-total-error .ff-total-output {
+  font-weight: 400;
+  color: #b42318;
+}

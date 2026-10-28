@@ -1,0 +1,75 @@
+/* FieldFlow signature pad. Paste into the app's CSS settings. */
+/* The value text on the details page, replaced by the image. */
+.ff-sig-hidden {
+  display: none !important;
+}
+
+/* The form's Signature input: still submitted, and still focusable for a "required" message,
+   but not shown (it holds a long data URL). */
+.ff-sig-offscreen {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: -1px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  clip-path: inset(50%) !important;
+  border: 0 !important;
+  white-space: nowrap !important;
+}
+
+.ff-sig {
+  margin: 8px 0;
+  max-width: 640px;
+}
+
+.ff-sig-canvas {
+  display: block;
+  width: 100%;
+  border: 1px solid #b8bec7;
+  border-radius: 6px;
+  background: #fff;
+  cursor: crosshair;
+  touch-action: none; /* the page doesn't scroll while signing */
+}
+
+.ff-sig-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.ff-sig-status {
+  margin: 0;
+  font-size: 14px;
+  color: #4a5361;
+}
+
+.ff-sig-status.ff-sig-error {
+  color: #b42318;
+}
+
+.ff-sig-clear {
+  padding: 6px 14px;
+  border: 1px solid #b8bec7;
+  border-radius: 6px;
+  background: #f6f7f9;
+  font: inherit;
+  cursor: pointer;
+}
+
+.ff-sig-clear:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.ff-sig-image {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  border: 1px solid #e3e6ea;
+  border-radius: 6px;
+  background: #fff;
+}

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FieldFlow widgets demo</title>
+  <link rel="stylesheet" href="demo.css">
+  <link rel="stylesheet" href="../widgets/signature-pad.css">
+  <link rel="stylesheet" href="../widgets/line-total.css">
+</head>
+<body>
+  <header class="demo-header">
+    <h1>FieldFlow widgets demo</h1>
+    <p>A stand-in for the Tadabase pages, with fake data. Nothing here leaves your browser.</p>
+    <button type="button" id="rerender">Re-render (mount every widget again)</button>
+  </header>
+
+  <main>
+    <section class="demo-card" id="complete-job">
+      <h2>Complete job: Replace water heater</h2>
+      <form id="complete-job-form">
+        <label for="status">Status</label>
+        <select id="status" name="field_905">
+          <option>In Progress</option>
+          <option selected>Completed</option>
+        </select>
+
+        <label for="signature">Customer signature</label>
+        <textarea id="signature" name="field_906" rows="3"></textarea>
+
+        <button type="submit">Save</button>
+      </form>
+      <p class="demo-note">Saved value of the Signature field: <span id="signature-preview">(empty)</span></p>
+    </section>
+
+    <section class="demo-card" id="job-details">
+      <h2>Job details (after Save)</h2>
+      <dl>
+        <dt>Signature</dt>
+        <dd><div id="signature-value"></div></dd>
+      </dl>
+    </section>
+
+    <section class="demo-card" id="job-item">
+      <h2>Add a job item</h2>
+      <form id="job-item-form">
+        <label for="description">Description</label>
+        <input id="description" name="field_901" value="Labor (hours)">
+
+        <label for="quantity">Quantity</label>
+        <input id="quantity" name="field_902" inputmode="decimal" value="2.5">
+
+        <label for="unit-price">Unit Price</label>
+        <input id="unit-price" name="field_903" inputmode="decimal" value="$1,234.50">
+
+        <button type="submit">Save</button>
+      </form>
+      <p class="demo-note">Try <code>1.234,50</code> or a quantity like <code>1.2345</code> to see the hint.</p>
+    </section>
+  </main>
+
+  <script src="../widgets/signature-pad.js"></script>
+  <script src="../widgets/line-total.js"></script>
+  <script src="demo.js"></script>
+</body>
+</html>

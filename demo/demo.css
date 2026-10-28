@@ -1,0 +1,77 @@
+body {
+  margin: 0;
+  padding: 16px;
+  background: #f3f4f6;
+  color: #1f2933;
+  font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.demo-header,
+main {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.demo-card {
+  margin: 16px 0;
+  padding: 16px 20px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+}
+
+h1 {
+  font-size: 24px;
+}
+
+h2 {
+  margin-top: 0;
+  font-size: 18px;
+}
+
+form {
+  display: grid;
+  gap: 6px;
+}
+
+label,
+dt {
+  margin-top: 8px;
+  font-weight: 600;
+}
+
+input,
+select,
+textarea {
+  padding: 6px 8px;
+  border: 1px solid #b8bec7;
+  border-radius: 6px;
+  font: inherit;
+}
+
+button {
+  justify-self: start;
+  margin-top: 8px;
+  padding: 6px 14px;
+  border: 1px solid #b8bec7;
+  border-radius: 6px;
+  background: #f6f7f9;
+  font: inherit;
+  cursor: pointer;
+}
+
+form > button[type="submit"] {
+  border-color: #1d4ed8;
+  background: #2563eb;
+  color: #fff;
+}
+
+dd {
+  margin: 4px 0 0;
+}
+
+.demo-note {
+  font-size: 14px;
+  color: #4a5361;
+  overflow-wrap: anywhere;
+}

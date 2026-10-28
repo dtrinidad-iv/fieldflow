@@ -32,6 +32,10 @@ export default [
         { property: 'innerHTML', message: 'Use textContent or DOM methods; record data must never be parsed as HTML.' },
         { property: 'outerHTML', message: 'Use DOM methods instead.' },
         { property: 'insertAdjacentHTML', message: 'Use DOM methods instead.' },
+        { property: 'srcdoc', message: 'An iframe srcdoc is parsed as HTML.' },
+        { property: 'setHTMLUnsafe', message: 'Use textContent or DOM methods.' },
+        { property: 'createContextualFragment', message: 'Use textContent or DOM methods.' },
+        { property: 'parseFromString', message: 'DOMParser output is HTML from text; build elements instead.' },
       ],
       'no-restricted-syntax': [
         'error',
