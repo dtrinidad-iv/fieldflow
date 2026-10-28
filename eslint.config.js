@@ -8,7 +8,8 @@ export default [
   security.configs.recommended,
   {
     languageOptions: {
-      ecmaVersion: 2023,
+      ecmaVersion: 'latest', // JSON import attributes (`with { type: 'json' }`) for config/
+
       sourceType: 'module',
       globals: { ...globals.node },
     },

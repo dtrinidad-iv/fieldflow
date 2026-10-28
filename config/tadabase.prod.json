@@ -1,0 +1,35 @@
+{
+  "_comment": "Tadabase table ids and field slugs for the prod app. PLACEHOLDERS until filled in: run scripts/tadabase-check.js prod (see docs/tadabase-setup.md), then set placeholder to false.",
+  "placeholder": true,
+  "tables": {
+    "customers": {
+      "id": "REPLACE_customers",
+      "fields": { "name": "field_900", "email": "field_901", "phone": "field_902", "address": "field_903" }
+    },
+    "technicians": {
+      "id": "REPLACE_technicians",
+      "fields": { "name": "field_900", "email": "field_901", "color": "field_902" }
+    },
+    "jobs": {
+      "id": "REPLACE_jobs",
+      "fields": {
+        "title": "field_900",
+        "description": "field_901",
+        "scheduledDate": "field_902",
+        "customer": "field_903",
+        "technician": "field_904",
+        "status": "field_905",
+        "signature": "field_906",
+        "total": "field_907"
+      }
+    },
+    "jobItems": {
+      "id": "REPLACE_jobItems",
+      "fields": { "job": "field_900", "description": "field_901", "quantity": "field_902", "unitPrice": "field_903", "lineTotal": "field_904" }
+    },
+    "invoices": {
+      "id": "REPLACE_invoices",
+      "fields": { "job": "field_900", "number": "field_901", "issuedDate": "field_902", "amount": "field_903", "pdfLink": "field_904" }
+    }
+  }
+}

@@ -30,6 +30,16 @@ describe('tadabase adapter', () => {
     });
   });
 
+  it('reads tables and fields from their endpoints, and rejects unexpected shapes', async () => {
+    const fetch = respond(200, { type: 'success', fields: [{ slug: 'field_3', name: 'Status', type: 'Drop Down' }] });
+    const p = createTadabasePlatform({ ...creds, fetch });
+    expect(await p.listFields('jobs')).toEqual([{ slug: 'field_3', name: 'Status', type: 'Drop Down' }]);
+    expect(fetch.mock.calls[0][0]).toBe('https://api.tadabase.io/api/v1/data-tables/jobs/fields');
+    const odd = createTadabasePlatform({ ...creds, fetch: respond(200, { type: 'success', columns: [] }) });
+    await expect(odd.listFields('jobs')).rejects.toMatchObject({ name: 'PlatformError' });
+    await expect(odd.listTables()).rejects.toMatchObject({ name: 'PlatformError' });
+  });
+
   it('sends filters, page and a capped limit as query parameters', async () => {
     const { fake, p } = make();
     await p.listRecords('jobs', { filters: [{ field: 'field_11', operator: 'is', value: 'open' }], page: 2, limit: 500 });

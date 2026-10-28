@@ -1,9 +1,10 @@
 // A stand-in for the Tadabase REST API, served through an injected fetch (never the network).
 // Response shapes follow docs.tadabase.io: list -> { type, items, total_pages, current_page },
-// get -> { type, item }, create -> { type, recordId }.
+// get -> { type, item }, create -> { type, recordId }, tables -> { type, data_tables },
+// fields -> { type, fields: [{ slug, name, type }] }.
 const BASE = 'https://api.tadabase.io/api/v1';
 
-export function createFakeTadabase({ seed = {} } = {}) {
+export function createFakeTadabase({ seed = {}, fields = {} } = {}) {
   const tables = new Map(Object.entries(seed).map(([t, rows]) => [t, new Map(rows.map((r) => [r.id, { ...r }]))]));
   const requests = [];
   let nextId = 1;
@@ -14,8 +15,16 @@ export function createFakeTadabase({ seed = {} } = {}) {
     const method = init.method ?? 'GET';
     requests.push({ url, method, headers: init.headers, body: init.body ? JSON.parse(init.body) : undefined });
     const { pathname, searchParams } = new URL(url);
-    // /data-tables/{tableId}/records[/{recordId}]
+    // /data-tables, /data-tables/{tableId}/fields, /data-tables/{tableId}/records[/{recordId}]
     const parts = pathname.replace(new URL(BASE).pathname, '').split('/').slice(1);
+    if (method === 'GET' && parts.length === 1 && parts[0] === 'data-tables') {
+      return reply(200, { type: 'success', data_tables: [...tables.keys()].map((id) => ({ id, name: `Table ${id}` })) });
+    }
+    if (method === 'GET' && parts.length === 3 && parts[0] === 'data-tables' && parts[2] === 'fields') {
+      const id = decodeURIComponent(parts[1]);
+      if (!tables.has(id)) return reply(404, { type: 'error', msg: 'table not found' });
+      return reply(200, { type: 'success', fields: fields[id] ?? [] });
+    }
     if (parts[0] !== 'data-tables' || parts[2] !== 'records' || parts.length > 4 || !parts[1]) {
       return reply(404, { type: 'error', msg: 'unknown route' });
     }

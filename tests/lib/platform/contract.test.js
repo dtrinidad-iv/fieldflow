@@ -15,15 +15,17 @@ const SEED = {
   empty: [],
 };
 
+const FIELDS = { [JOBS]: [{ slug: 'field_10', name: 'Title', type: 'Text' }, { slug: 'field_11', name: 'Status', type: 'Drop Down' }] };
+
 const adapters = {
-  memory: (seed = SEED) => createMemoryPlatform({ seed }),
+  memory: (seed = SEED) => createMemoryPlatform({ seed, fields: FIELDS }),
   tadabase: (seed = SEED) =>
     createTadabasePlatform({
       appId: 'app',
       appKey: 'key',
       appSecret: 'secret',
       allowLiveWrites: true,
-      fetch: createFakeTadabase({ seed }).fetch,
+      fetch: createFakeTadabase({ seed, fields: FIELDS }).fetch,
     }),
 };
 
@@ -99,6 +101,15 @@ describe.each(Object.entries(adapters))('%s adapter contract', (_, make) => {
     await expect(p.updateRecord(JOBS, bad, {})).rejects.toThrow(/invalid record id/);
     await expect(p.deleteRecord(JOBS, bad)).rejects.toThrow(/invalid record id/);
     await expect(p.listRecords(bad)).rejects.toThrow(/invalid table id/);
+  });
+
+  it('lists tables and a table\'s fields (read-only)', async () => {
+    const p = make();
+    expect((await p.listTables()).map((t) => t.id).sort()).toEqual(['empty', JOBS]);
+    expect(await p.listFields(JOBS)).toEqual(FIELDS[JOBS]);
+    expect(await p.listFields('empty')).toEqual([]);
+    await expect(p.listFields('nope')).rejects.toMatchObject({ name: 'PlatformError', status: 404 });
+    await expect(p.listFields('../x')).rejects.toThrow(/invalid table id/);
   });
 
   it('rejects unknown filter operators, even on an empty table', async () => {
