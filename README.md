@@ -402,7 +402,8 @@ This repo is built to make mistakes against live data or AWS hard:
 | 05 | Signature pad and live total widgets, demo page | Done (live check pending) |
 | 06 | Kanban board (native) | Done (live check pending) |
 | 07 | Job checks (CRM contact sync moved to later) | Done (live check pending) |
-| 08 | Go live: accounts, first deploy, live checks, walkthrough | WIP |
+| 08 | Go live: accounts, first deploy, live checks, walkthrough | Deferred (no paid accounts yet) |
+| 09 | Local client demo, sample invoice and overview page | Done |
 
 **Not deployed yet.** The code is complete and tested offline. The first deploy, the live
 end-to-end test, and confirming the Tadabase API details still open in the plans (response shapes,

@@ -1,6 +1,7 @@
 # 09 — Local client demo, sample invoice and overview page
 
-**Status:** WIP
+**Status:** Done
+**Commits:** `a7b0095` (widgets), `c3c61bc` (docs), `20a2da2` (widgets), `169d9c1` (docs). Overview page: https://claude.ai/artifact/V1fp9N1sZwEytM9NwQf7UR (private)
 
 ## Goal
 Show FieldFlow to a client **without paying for anything**: no AWS account, no paid Tadabase plan.

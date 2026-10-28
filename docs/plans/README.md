@@ -16,4 +16,4 @@ One file per task: `NN-task-name.md`, numbered in order. Each starts with a **St
 | 06 | [Kanban board (native)](06-native-kanban-board.md) | Done (live check pending) |
 | 07 | [Job checks](07-job-checks.md) | Done (live check pending) |
 | 08 | [Go live: accounts, first deploy, live checks, walkthrough](08-go-live.md) | Deferred (no paid accounts yet) |
-| 09 | [Local client demo, sample invoice and overview page](09-local-client-demo.md) | WIP |
+| 09 | [Local client demo, sample invoice and overview page](09-local-client-demo.md) | Done |
