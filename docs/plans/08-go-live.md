@@ -1,6 +1,6 @@
 # 08 — Go live: accounts, first deploy, live checks, walkthrough
 
-**Status:** WIP
+**Status:** Deferred (2026-10-28: the user wants a free local demo first; plan 09). Resume from phase A.
 
 ## Goal
 Take FieldFlow from "built and tested offline" to running for real: an AWS account, the dev

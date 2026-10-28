@@ -14,6 +14,7 @@ forms, the totals and the status rules all live in Tadabase. Every custom piece 
 reason it exists, in [Native vs custom](#native-vs-custom).
 
 ## Contents
+- [Try it in 1 minute (local demo)](#try-it-in-1-minute-local-demo)
 - [How it works](#how-it-works)
 - [Native vs custom](#native-vs-custom)
 - [Features](#features)
@@ -24,6 +25,41 @@ reason it exists, in [Native vs custom](#native-vs-custom).
 - [Development](#development)
 - [Safety rules](#safety-rules)
 - [Project status and roadmap](#project-status-and-roadmap)
+
+## Try it in 1 minute (local demo)
+
+```bash
+npm install
+npm run demo          # then open http://127.0.0.1:5173
+```
+
+A local web page that runs **the real FieldFlow code**: the same `generate-invoice`,
+`invoice-pdf` and `check-schedule` functions that deploy to AWS Lambda, the same PDF renderer and
+signed links, and both widgets. Only the platform is a stand-in: an in-memory copy of the Tadabase
+API (the same one the test suite uses), plus a small server that does what the Tadabase app would
+(fire the webhooks after a change, apply the record rule, compute the formula fields). No accounts,
+no cost, and nothing leaves your machine.
+
+What to try:
+1. **Drag** a job between Scheduled and In Progress. Completed and Invoiced are locked, as on the
+   real board.
+2. Open *Fix leaking tap*, change its **slot to Morning**, and save. Both of Alex's jobs are
+   flagged **Double-booked** (`check-schedule`).
+3. Open *Install smart thermostat*, and **add an item**. The line total updates as you type; try
+   `1.234,50` as a price to see the hint.
+4. **Sign** in the pad and **Complete job**. The real invoice function creates the invoice, the job
+   moves to Invoiced, and **Open invoice PDF** shows the PDF, served through its signed link.
+5. Complete *Fix leaking tap*, which has no items. It's **sent back** to In Progress with the
+   reason.
+6. Watch **Behind the scenes** at the bottom: every webhook, and what each function answered.
+
+`npm run demo:invoice` writes a `sample-invoice.pdf`, also linked from the demo's header.
+
+What's the same in production: the functions, the money rules, the PDF and link signing, the
+idempotency, and the widgets. What changes: Tadabase's own pages instead of this one, its REST API
+instead of the in-memory copy, S3 instead of a Map, and DynamoDB instead of an in-memory store.
+`template.yaml` is validated and built by CI on every push, and [docs/go-live.md](docs/go-live.md)
+is the step-by-step deploy.
 
 ## How it works
 
@@ -175,7 +211,7 @@ lib/                  Shared code, bundled into each function by esbuild
 widgets/              Browser widgets, pasted into the app (install guide: widgets/README.md)
   signature-pad.js/.css  Signature capture on the Complete job form, image on the details page
   line-total.js/.css     Live Quantity × Unit Price on the Job Items form
-demo/                 Local demo page for the widgets (open demo/index.html)
+demo/                 Local demos: app.* (npm run demo, the whole flow) and index.html (widgets only)
 config/
   tadabase.dev.json   Table ids and field slugs for the dev app
   tadabase.prod.json  Same for the prod app
@@ -183,6 +219,8 @@ config/
 scripts/
   tadabase-check.js   Read-only check of the Tadabase app against the mapping
   smoke-test.js       Read-only check of a deployed stack's endpoints
+  demo-server.js      npm run demo: the real functions on 127.0.0.1, with an in-memory Tadabase
+  sample-invoice.js   npm run demo:invoice: a sample PDF with fake data
   scan-secrets.sh     Secret scanner (pre-commit and CI)
 tests/                Vitest: functions, lib, adapters (contract tests), infra and hooks
 docs/
