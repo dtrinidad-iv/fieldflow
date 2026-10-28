@@ -57,7 +57,7 @@ describe('tadabase-check: check mode', () => {
     expect(ok).toBe(true);
     expect(out).toMatch(/^OK +jobs\.status +field_6 "status" \(Drop Down\)/m);
     expect(out).toMatch(/^OK +jobs list shape/m);
-    expect(out).toMatch(/^OK +jobs get shape +item with 8\/8 mapped fields present/m);
+    expect(out).toMatch(/^OK +jobs get shape +item with 11\/11 mapped fields present/m);
     expect(out).toMatch(/^INFO +jobs unmapped fields +field_99 "Notes"/m);
     expect(out).toMatch(/^INFO +missing record +getRecord returns null/m);
     expect(out).toMatch(/^INFO +missing table +PlatformError status 404/m);

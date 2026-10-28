@@ -21,6 +21,9 @@ import { requireId } from '../../lib/validate.js';
 import { verifySecret } from '../../lib/webhook.js';
 
 const COMPLETED = 'Completed';
+const SENT_BACK_STATUS = 'In Progress';
+// Clearing an old Invoice Problem after a create is best effort, and only with time to spare.
+export const MIN_MS_FOR_CLEAR = 6000;
 // One Tadabase write (5 s timeout) plus margin must fit in what's left of the invocation.
 export const MIN_MS_FOR_CREATE = 8000;
 const resolve = (dep) => (typeof dep === 'function' ? dep() : dep);
@@ -55,6 +58,40 @@ async function jobItems(platform, schema, jobId) {
   return rows.map((r) => toLogical(schema, 'jobItems', r)).filter((r) => connectionId(r.job) === jobId);
 }
 
+// Everything a job needs before it can be invoiced. Each gap is a 422 thrown before any side
+// effect; generate() turns it into a send-back.
+async function readyInvoice({ job, jobId, platform, schema, business: biz, now, log }) {
+  if (!hasSignature(job.signature)) throw new HttpError(422, 'job has no signature');
+  const customerId = connectionId(job.customer);
+  if (!customerId) throw new HttpError(422, 'job has no customer');
+  const customerRaw = await platform.getRecord(tableId(schema, 'customers'), customerId);
+  if (!customerRaw) throw new HttpError(422, 'job customer not found');
+  const technicianId = connectionId(job.technician);
+  if (!technicianId) throw new HttpError(422, 'job has no technician');
+  const technicianRaw = await platform.getRecord(tableId(schema, 'technicians'), technicianId);
+  if (!technicianRaw) throw new HttpError(422, 'job technician not found');
+  const items = await jobItems(platform, schema, jobId);
+  if (!items.length) throw new HttpError(422, 'job has no line items');
+
+  const invoice = buildInvoice({
+    job,
+    customer: toLogical(schema, 'customers', customerRaw),
+    technician: toLogical(schema, 'technicians', technicianRaw),
+    items,
+    business: biz,
+    issuedAt: now(),
+  });
+  // The app's own Total (a formula field) must agree with the line items; if not, something is
+  // off in the data, and no invoice is better than a wrong one.
+  if (job.total !== undefined && job.total !== null && job.total !== '') {
+    if (parseMoneyCents(job.total, 'job total') !== invoice.totalCents) {
+      log.warn('job total differs from its line items', { jobId });
+      throw new HttpError(422, 'job total differs from its line items');
+    }
+  }
+  return invoice;
+}
+
 async function generate({ jobId, platform, schema, storage, business: biz, linkSecret, baseUrl, now, remainingMs, log }) {
   const raw = await platform.getRecord(tableId(schema, 'jobs'), jobId);
   if (!raw) throw notFound('job not found');
@@ -70,33 +107,24 @@ async function generate({ jobId, platform, schema, storage, business: biz, linkS
     return { store: true, value: { status: 200, body: { duplicate: true, invoiceId: existing.id, number: existing.number ?? number } } };
   }
 
-  // Not stored (thrown before any side effect): once the job is signed and saved again, the next
-  // delivery invoices it.
-  if (!hasSignature(job.signature)) throw new HttpError(422, 'job has no signature');
-  const customerId = connectionId(job.customer);
-  if (!customerId) throw new HttpError(422, 'job has no customer');
-  const customerRaw = await platform.getRecord(tableId(schema, 'customers'), customerId);
-  if (!customerRaw) throw new HttpError(422, 'job customer not found');
-  const technicianId = connectionId(job.technician);
-  const technicianRaw = technicianId ? await platform.getRecord(tableId(schema, 'technicians'), technicianId) : null;
-  const items = await jobItems(platform, schema, jobId);
-  if (!items.length) throw new HttpError(422, 'job has no line items');
-
-  const invoice = buildInvoice({
-    job,
-    customer: toLogical(schema, 'customers', customerRaw),
-    technician: technicianRaw && toLogical(schema, 'technicians', technicianRaw),
-    items,
-    business: biz,
-    issuedAt: now(),
-  });
-  // The app's own Total (a formula field) must agree with the line items; if not, something is
-  // off in the data, and no invoice is better than a wrong one.
-  if (job.total !== undefined && job.total !== null && job.total !== '') {
-    if (parseMoneyCents(job.total, 'job total') !== invoice.totalCents) {
-      log.warn('job total differs from its line items', { jobId });
-      throw new HttpError(422, 'job total differs from its line items');
-    }
+  let invoice;
+  try {
+    invoice = await readyInvoice({ job, jobId, platform, schema, business: biz, now, log });
+  } catch (err) {
+    // Only this function's own "not ready" answers. A PlatformError carries the upstream status,
+    // which can also be 422: that's an app failure (502), never a reason to undo a completion.
+    if (!(err instanceof HttpError) || err.status !== 422) throw err;
+    // Not ready: send the job back, so "Completed" only sticks on a job that can be invoiced,
+    // however it got there (form, board, import). The write is the same every time, and the answer
+    // isn't stored, so the next completion is checked again. If the write fails, the error
+    // releases the claim and a retry writes it again. In Progress doesn't fire the
+    // job-completed webhook (filtered to Completed), so this can't loop.
+    await platform.updateRecord(tableId(schema, 'jobs'), jobId, toSlugs(schema, 'jobs', {
+      status: SENT_BACK_STATUS,
+      invoiceProblem: `Not invoiced: ${err.message}. Fix it and complete the job again.`,
+    }));
+    log.info('job sent back', { jobId, reason: err.message });
+    return { store: false, value: { status: 422, body: { error: err.message, sentBack: true } } };
   }
 
   await storage.put(`invoices/${jobId}.pdf`, await renderInvoicePdf(invoice), 'application/pdf');
@@ -118,6 +146,19 @@ async function generate({ jobId, platform, schema, storage, business: biz, linkS
     throw err;
   }
   log.info('invoice created', { jobId, invoiceId: id });
+  // A job sent back earlier still shows why. Clear it, best effort: the invoice exists, so this
+  // must never fail the delivery (a retry would only find the duplicate).
+  if (typeof job.invoiceProblem === 'string' && job.invoiceProblem.trim() !== '') {
+    if (remainingMs() < MIN_MS_FOR_CLEAR) {
+      log.warn('invoice problem not cleared: not enough time left', { jobId });
+    } else {
+      try {
+        await platform.updateRecord(tableId(schema, 'jobs'), jobId, toSlugs(schema, 'jobs', { invoiceProblem: '' }));
+      } catch {
+        log.warn('invoice problem not cleared', { jobId });
+      }
+    }
+  }
   return { store: true, value: { status: 201, body: { invoiceId: id, number, amount, pdfLink } } };
 }
 

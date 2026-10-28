@@ -20,7 +20,10 @@
         "technician": "field_904",
         "status": "field_905",
         "signature": "field_906",
-        "total": "field_907"
+        "total": "field_907",
+        "slot": "field_908",
+        "invoiceProblem": "field_909",
+        "scheduleConflict": "field_910"
       }
     },
     "jobItems": {

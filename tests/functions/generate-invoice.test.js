@@ -1,6 +1,6 @@
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it, vi } from 'vitest';
-import { createHandler, MIN_MS_FOR_CREATE } from '../../functions/generate-invoice/handler.js';
+import { createHandler, MIN_MS_FOR_CLEAR, MIN_MS_FOR_CREATE } from '../../functions/generate-invoice/handler.js';
 import { PlatformError } from '../../lib/errors.js';
 import { createMemoryStore, LEASE_MS } from '../../lib/idempotency.js';
 import { verifyInvoiceLink } from '../../lib/links.js';
@@ -21,15 +21,19 @@ const DOMAIN = 'abc123.execute-api.us-east-1.amazonaws.com';
 
 const SIGNATURE = 'data:image/png;base64,iVBORw0KGgo=';
 
-function seed({ status = 'Completed', items = 2, invoices = [], total = '$185.00', signature = SIGNATURE } = {}) {
+function seed({
+  status = 'Completed', items = 2, invoices = [], total = '$185.00', signature = SIGNATURE,
+  customer = [{ id: 'cust1', val: 'Jane' }], technician = ['tech1'], unitPrice = 80, invoiceProblem,
+} = {}) {
   return {
-    T_jobs: [{ id: 'job42', [F('jobs', 'title')]: 'Fix boiler', [F('jobs', 'status')]: status, [F('jobs', 'customer')]: [{ id: 'cust1', val: 'Jane' }],
-      [F('jobs', 'technician')]: ['tech1'], [F('jobs', 'scheduledDate')]: '2026-11-02', [F('jobs', 'total')]: total, [F('jobs', 'signature')]: signature }],
+    T_jobs: [{ id: 'job42', [F('jobs', 'title')]: 'Fix boiler', [F('jobs', 'status')]: status, [F('jobs', 'customer')]: customer,
+      [F('jobs', 'technician')]: technician, [F('jobs', 'scheduledDate')]: '2026-11-02', [F('jobs', 'total')]: total, [F('jobs', 'signature')]: signature,
+      ...(invoiceProblem === undefined ? {} : { [F('jobs', 'invoiceProblem')]: invoiceProblem }) }],
     T_customers: [{ id: 'cust1', [F('customers', 'name')]: 'Jane Customer', [F('customers', 'email')]: 'jane@example.test' }],
     T_technicians: [{ id: 'tech1', [F('technicians', 'name')]: 'Sam Tech' }],
     T_jobItems: [
       ...Array.from({ length: items }, (_, i) => ({ id: `item${i}`, [F('jobItems', 'job')]: ['job42'], [F('jobItems', 'description')]: i ? 'Valve' : 'Labour',
-        [F('jobItems', 'quantity')]: i ? 1 : 2, [F('jobItems', 'unitPrice')]: i ? '$25.00' : 80 })),
+        [F('jobItems', 'quantity')]: i ? 1 : 2, [F('jobItems', 'unitPrice')]: i ? '$25.00' : unitPrice })),
       { id: 'other', [F('jobItems', 'job')]: ['job99'], [F('jobItems', 'description')]: 'Someone else', [F('jobItems', 'quantity')]: 1, [F('jobItems', 'unitPrice')]: 999 },
     ],
     T_invoices: invoices,
@@ -189,7 +193,7 @@ describe('generate-invoice', () => {
       ['a signature over 100 KB', `data:image/png;base64,${'A'.repeat(100_000)}`],
     ])('a Completed job with %s with 422, creating nothing', async (_, signature) => {
       const { handler, platform, storage } = setup({ signature });
-      expect(await call(handler)).toEqual({ status: 422, body: { error: 'job has no signature' } });
+      expect(await call(handler)).toEqual({ status: 422, body: { error: 'job has no signature', sentBack: true } });
       expect(creates(platform)).toHaveLength(0);
       expect(storage.put).not.toHaveBeenCalled();
     });
@@ -201,7 +205,7 @@ describe('generate-invoice', () => {
 
     it('a job whose Total disagrees with its line items with 422, logging only the job id', async () => {
       const { handler, platform, log, storage } = setup({ total: '$999.00' });
-      expect(await call(handler)).toEqual({ status: 422, body: { error: 'job total differs from its line items' } });
+      expect(await call(handler)).toEqual({ status: 422, body: { error: 'job total differs from its line items', sentBack: true } });
       expect(log.warn).toHaveBeenCalledWith('job total differs from its line items', { jobId: 'job42' });
       expect(creates(platform)).toHaveLength(0);
       expect(storage.put).not.toHaveBeenCalled();
@@ -217,11 +221,83 @@ describe('generate-invoice', () => {
     );
   });
 
-  it('does not remember a "no signature" answer: once the job is signed and saved, it is invoiced', async () => {
-    const { handler, platform } = setup({ signature: '' });
-    expect((await call(handler)).status).toBe(422);
-    await platform.updateRecord('T_jobs', 'job42', { [F('jobs', 'signature')]: SIGNATURE });
-    expect((await call(handler)).status).toBe(201);
+  describe('sends back a job that is not ready to invoice (plan 07)', () => {
+    const jobOf = async (platform) => platform.getRecord('T_jobs', 'job42');
+
+    it.each([
+      ['no signature', { signature: '' }, 'job has no signature'],
+      ['no customer', { customer: null }, 'job has no customer'],
+      ['a missing customer', { customer: ['cust0'] }, 'job customer not found'],
+      ['no technician', { technician: null }, 'job has no technician'],
+      ['a missing technician', { technician: ['tech0'] }, 'job technician not found'],
+      ['no line items', { items: 0 }, 'job has no line items'],
+      ['an unreadable amount', { unitPrice: '1.234,50' }, 'item 1 unit price is not an amount like 1234.50'],
+      ['a Total mismatch', { total: '$999.00' }, 'job total differs from its line items'],
+    ])('%s: back to In Progress with the reason, nothing created, nothing remembered', async (_, options, reason) => {
+      const { handler, platform, storage, store } = setup(options);
+      expect(await call(handler)).toEqual({ status: 422, body: { error: reason, sentBack: true } });
+      const job = await jobOf(platform);
+      expect(job[F('jobs', 'status')]).toBe('In Progress');
+      expect(job[F('jobs', 'invoiceProblem')]).toBe(`Not invoiced: ${reason}. Fix it and complete the job again.`);
+      expect(creates(platform)).toHaveLength(0);
+      expect(storage.put).not.toHaveBeenCalled();
+      expect(store.items.size).toBe(0); // the claim is released, not stored
+    });
+
+    it('once fixed and completed again, the job is invoiced and the problem cleared', async () => {
+      const { handler, platform } = setup({ signature: '' });
+      expect((await call(handler)).status).toBe(422);
+      await platform.updateRecord('T_jobs', 'job42', { [F('jobs', 'signature')]: SIGNATURE, [F('jobs', 'status')]: 'Completed' });
+      expect((await call(handler)).status).toBe(201);
+      expect((await jobOf(platform))[F('jobs', 'invoiceProblem')]).toBe('');
+    });
+
+    it.each(['getRecord', 'listRecords'])('an upstream 422 from %s is an app failure (502), never a send-back', async (method) => {
+      const { handler, platform } = setup();
+      // getRecord: let the job read succeed, then fail the customer read.
+      if (method === 'getRecord') {
+        const real = platform.getRecord;
+        let n = 0;
+        platform.getRecord = (...args) => (++n === 2 ? Promise.reject(new PlatformError(422, 'getRecord')) : real(...args));
+      } else {
+        // The first two lists are the existing-invoice lookups; the third is the job items.
+        const real = platform.listRecords;
+        let n = 0;
+        platform.listRecords = (...args) => (++n === 3 ? Promise.reject(new PlatformError(422, 'listRecords')) : real(...args));
+      }
+      expect(await call(handler)).toEqual({ status: 502, body: { error: 'upstream platform error' } });
+      expect(platform.calls.filter((c) => c.method === 'updateRecord')).toHaveLength(0);
+      expect((await jobOf(platform))[F('jobs', 'status')]).toBe('Completed');
+    });
+
+    it('a failed send-back write answers 502 and releases the claim, so a retry writes it', async () => {
+      const { handler, platform, store } = setup({ items: 0 });
+      platform.failNext('updateRecord');
+      expect((await call(handler)).status).toBe(502);
+      expect(store.items.size).toBe(0);
+      expect((await call(handler)).status).toBe(422);
+      expect((await jobOf(platform))[F('jobs', 'status')]).toBe('In Progress');
+    });
+
+    it('does not touch Invoice Problem after a create when it is already empty', async () => {
+      const { handler, platform } = setup();
+      expect((await call(handler)).status).toBe(201);
+      expect(platform.calls.filter((c) => c.method === 'updateRecord')).toHaveLength(0);
+    });
+
+    it('a failed clear, or too little time to clear, never fails the invoice', async () => {
+      const failing = setup({ invoiceProblem: 'Not invoiced: old' });
+      failing.platform.failNext('updateRecord');
+      expect((await call(failing.handler)).status).toBe(201);
+      expect(failing.log.warn).toHaveBeenCalledWith('invoice problem not cleared', { jobId: 'job42' });
+
+      const late = setup({ invoiceProblem: 'Not invoiced: old' });
+      let calls = 0;
+      // Plenty of time for the create, then too little for the clear.
+      const context = { getRemainingTimeInMillis: () => (++calls > 1 ? MIN_MS_FOR_CLEAR - 1 : 20_000) };
+      expect((await call(late.handler, event(), context)).status).toBe(201);
+      expect(late.log.warn).toHaveBeenCalledWith('invoice problem not cleared: not enough time left', { jobId: 'job42' });
+    });
   });
 
   it('skips a job that is not Completed, without remembering it, so it is invoiced once it is', async () => {
