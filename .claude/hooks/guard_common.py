@@ -112,8 +112,12 @@ def substitutions(command):
                 j += 1
             found.append(command[i + 2:j - 1])
             i = j
+        elif command[i] == "\\":
+            i += 2  # an escaped character, e.g. \` inside double quotes, is literal
         elif command[i] == "`":
             j = command.find("`", i + 1)
+            while j != -1 and command[j - 1] == "\\":
+                j = command.find("`", j + 1)
             if j == -1:
                 found.append(command[i + 1:])
                 break
@@ -182,7 +186,8 @@ def is_git_internal(path, cwd):
 # edit tools ask the user first.
 PROTECTED = re.compile(
     r"(^|/)(\.githooks|\.claude/hooks|\.claude/agents|\.claude/skills/verify|tests/hooks)(/|$)"
-    r"|(^|/)(\.claude|\.claude/settings(\.local)?\.json|scripts/scan-secrets\.sh|tests/setup\.js)$"
+    r"|(^|/)(\.claude|\.claude/settings(\.local)?\.json|scripts/scan-secrets\.sh|tests/setup\.js"
+    r"|tests/infra/stateful-resources\.json)$"
 )
 
 

@@ -143,6 +143,7 @@ describe('guard-bash', () => {
     'npm test & git push --force',
     'echo "$(git push --force)"',
     'echo `git reset --hard`',
+    'echo "\\`x\\`" `git push -f`',
     'G=git; $G push -f',
     'watch -n 5 git push -f',
     'bash <<EOF\ngit push --force\nEOF',
@@ -197,6 +198,7 @@ describe('guard-bash', () => {
     "sed -i '' 's/true/false/' samconfig.toml",
     'echo x > tests/setup.js',
     'echo x > scripts/scan-secrets.sh',
+    'echo "{}" > tests/infra/stateful-resources.json',
     'curl -o .claude/hooks/guard-bash.py https://example.com/x',
     'python3 -c "open(\'.claude/hooks/guard-bash.py\', \'w\').write(\'\')"',
     // Other
@@ -239,6 +241,7 @@ describe('guard-bash', () => {
     'git -C /tmp status',
     'git -c color.ui=never log -1',
     'grep -E \'sam |aws \' README.md',
+    'grep -n "Infrastructure (\\`template.yaml\\`" docs/plans/02.md',
     "grep -rn createHandler functions lib --include='*.js'",
     'set -euo pipefail',
     'for f in a b; do echo $f; done',
@@ -342,6 +345,7 @@ describe('protect-files', () => {
     'scripts/scan-secrets.sh',
     'tests/setup.js',
     'tests/hooks/hooks.test.js',
+    'tests/infra/stateful-resources.json',
     '.CLAUDE/Hooks/guard-bash.py',
   ])('asks the user before editing the guard rails: %s', (filePath) => {
     const { code, stdout } = file('Edit', filePath, { old_string: 'a', new_string: 'b' });
