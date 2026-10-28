@@ -8,7 +8,7 @@
     },
     "technicians": {
       "id": "REPLACE_technicians",
-      "fields": { "name": "field_900", "email": "field_901", "color": "field_902" }
+      "fields": { "name": "field_900", "email": "field_901" }
     },
     "jobs": {
       "id": "REPLACE_jobs",

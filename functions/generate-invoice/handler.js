@@ -11,7 +11,7 @@ import { dynamoClient, createS3Storage } from '../../lib/aws.js';
 import { HttpError, notFound } from '../../lib/errors.js';
 import { parseJsonBody, wrap } from '../../lib/http.js';
 import { createDynamoStore, withIdempotency } from '../../lib/idempotency.js';
-import { buildInvoice, connectionId, invoiceNumber, parseMoneyCents } from '../../lib/invoice.js';
+import { buildInvoice, connectionId, hasSignature, invoiceNumber, parseMoneyCents } from '../../lib/invoice.js';
 import { invoiceLink } from '../../lib/links.js';
 import { createLogger } from '../../lib/log.js';
 import { renderInvoicePdf } from '../../lib/pdf.js';
@@ -70,6 +70,9 @@ async function generate({ jobId, platform, schema, storage, business: biz, linkS
     return { store: true, value: { status: 200, body: { duplicate: true, invoiceId: existing.id, number: existing.number ?? number } } };
   }
 
+  // Not stored (thrown before any side effect): once the job is signed and saved again, the next
+  // delivery invoices it.
+  if (!hasSignature(job.signature)) throw new HttpError(422, 'job has no signature');
   const customerId = connectionId(job.customer);
   if (!customerId) throw new HttpError(422, 'job has no customer');
   const customerRaw = await platform.getRecord(tableId(schema, 'customers'), customerId);

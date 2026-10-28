@@ -25,6 +25,13 @@ describe('schema', () => {
     expect(validateSchema(valid())).toBeTruthy();
   });
 
+  it('accepts a mapping filled in before technicians.color was dropped (plan 06)', () => {
+    const schema = valid();
+    schema.tables.technicians.fields.color = 'field_99';
+    expect(validateSchema(schema)).toBeTruthy();
+    expect(REQUIRED_FIELDS.technicians).not.toHaveProperty('color');
+  });
+
   it.each([
     ['a missing table', (s) => delete s.tables.invoices, /table invoices is not mapped/],
     ['a missing field', (s) => delete s.tables.jobs.fields.status, /jobs.status must be a field slug/],

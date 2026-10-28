@@ -320,6 +320,18 @@ describe('signature pad, view mode', () => {
   });
 });
 
+// The invoice function only invoices a job whose signature passes lib/invoice.js hasSignature. A
+// signature the pad saves must pass it, and anything the pad refuses must fail it.
+describe('parity with lib/invoice.js hasSignature', () => {
+  it.each([
+    PNG, '', 'signed by phone', 'javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz4=',
+    `${PNG}"><b>`, 'data:image/png;base64,', `data:image/png;base64,${'A'.repeat(99_978)}`, `data:image/png;base64,${'A'.repeat(99_979)}`,
+  ])('%#', async (value) => {
+    const { hasSignature, MAX_SIGNATURE_LENGTH } = await import('../../lib/invoice.js');
+    expect(pad.isSignature(value, MAX_SIGNATURE_LENGTH)).toBe(hasSignature(value));
+  });
+});
+
 describe('isSignature', () => {
   it('accepts only PNG data URLs under the cap', () => {
     expect(pad.isSignature(PNG, 1000)).toBe(true);

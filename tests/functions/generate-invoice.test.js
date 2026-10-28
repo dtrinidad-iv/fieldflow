@@ -19,10 +19,12 @@ const business = { name: 'Acme Field Services', addressLines: ['1 Main St'], ema
 const START = new Date('2026-11-03T15:00:00Z').getTime();
 const DOMAIN = 'abc123.execute-api.us-east-1.amazonaws.com';
 
-function seed({ status = 'Completed', items = 2, invoices = [], total = '$185.00' } = {}) {
+const SIGNATURE = 'data:image/png;base64,iVBORw0KGgo=';
+
+function seed({ status = 'Completed', items = 2, invoices = [], total = '$185.00', signature = SIGNATURE } = {}) {
   return {
     T_jobs: [{ id: 'job42', [F('jobs', 'title')]: 'Fix boiler', [F('jobs', 'status')]: status, [F('jobs', 'customer')]: [{ id: 'cust1', val: 'Jane' }],
-      [F('jobs', 'technician')]: ['tech1'], [F('jobs', 'scheduledDate')]: '2026-11-02', [F('jobs', 'total')]: total }],
+      [F('jobs', 'technician')]: ['tech1'], [F('jobs', 'scheduledDate')]: '2026-11-02', [F('jobs', 'total')]: total, [F('jobs', 'signature')]: signature }],
     T_customers: [{ id: 'cust1', [F('customers', 'name')]: 'Jane Customer', [F('customers', 'email')]: 'jane@example.test' }],
     T_technicians: [{ id: 'tech1', [F('technicians', 'name')]: 'Sam Tech' }],
     T_jobItems: [
@@ -179,6 +181,19 @@ describe('generate-invoice', () => {
       expect((await call(handler, event({ recordId: 'job0' }))).status).toBe(404);
     });
 
+    it.each([
+      ['no signature', null],
+      ['an empty signature', ''],
+      ['text instead of an image', 'signed by phone'],
+      ['an SVG instead of a PNG', 'data:image/svg+xml;base64,PHN2Zz4='],
+      ['a signature over 100 KB', `data:image/png;base64,${'A'.repeat(100_000)}`],
+    ])('a Completed job with %s with 422, creating nothing', async (_, signature) => {
+      const { handler, platform, storage } = setup({ signature });
+      expect(await call(handler)).toEqual({ status: 422, body: { error: 'job has no signature' } });
+      expect(creates(platform)).toHaveLength(0);
+      expect(storage.put).not.toHaveBeenCalled();
+    });
+
     it('a job without line items with 422', async () => {
       const { handler } = setup({ items: 0 });
       expect((await call(handler)).status).toBe(422);
@@ -200,6 +215,13 @@ describe('generate-invoice', () => {
         expect(creates(platform)).toHaveLength(0);
       },
     );
+  });
+
+  it('does not remember a "no signature" answer: once the job is signed and saved, it is invoiced', async () => {
+    const { handler, platform } = setup({ signature: '' });
+    expect((await call(handler)).status).toBe(422);
+    await platform.updateRecord('T_jobs', 'job42', { [F('jobs', 'signature')]: SIGNATURE });
+    expect((await call(handler)).status).toBe(201);
   });
 
   it('skips a job that is not Completed, without remembering it, so it is invoiced once it is', async () => {
