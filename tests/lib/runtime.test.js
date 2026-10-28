@@ -41,6 +41,22 @@ describe('runtime', () => {
     expect(requests).toEqual([]);
   });
 
+  it('loads only the secrets the function asks for (its IAM role allows exactly those)', async () => {
+    const rt = createRuntime({ env: { STAGE: 'dev' }, schema, getParameters, secretKeys: ['appId', 'appKey', 'appSecret', 'webhookSecret'] });
+    const secrets = await rt.secrets();
+    expect(getParameters.mock.calls[0][0]).not.toContain('/fieldflow/dev/link-secret');
+    expect(getParameters.mock.calls[0][0]).toHaveLength(4);
+    expect(secrets).not.toHaveProperty('linkSecret');
+    expect(secrets.webhookSecret).toBe('value-of-webhook-secret');
+  });
+
+  it('refuses a second getRuntime call that asks for different secrets', () => {
+    const options = { env: { STAGE: 'dev' }, schema, getParameters, secretKeys: ['appId', 'appKey', 'appSecret', 'webhookSecret'] };
+    const rt = getRuntime(options);
+    expect(getRuntime({ ...options })).toBe(rt);
+    expect(() => getRuntime({ ...options, secretKeys: undefined })).toThrow(/different secretKeys/);
+  });
+
   it('refuses to start with a placeholder mapping', () => {
     const placeholder = { ...schema, placeholder: true };
     expect(() => createRuntime({ env: { STAGE: 'dev' }, schema: placeholder, getParameters })).toThrow(/placeholder ids/);
