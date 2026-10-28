@@ -11,6 +11,7 @@ The guiding rule: **build natively first; write code only when the platform can'
 - `npm test`: Vitest (handlers, adapters, widgets with jsdom, and the safety hooks)
 - `npm run lint`: ESLint, with the security plugin and the no-innerHTML rule for widgets
 - `.claude/skills/verify/verify.sh`: everything (secret scan, lint, tests with coverage, npm audit, sam validate). Run it before saying a task is done.
+- `sam build`: bundles each function with esbuild (`Metadata: BuildMethod: esbuild`, `CodeUri: ./`, one entry point per function). Needs the SAM CLI.
 
 ## Conventions
 - Handlers export `createHandler({ platform, config })`, so tests inject `lib/platform/memory.js`. Only the exported `handler` wires up the real Tadabase adapter.
@@ -20,6 +21,13 @@ The guiding rule: **build natively first; write code only when the platform can'
   3. Do the work through the adapter
   4. Return JSON
 - Handlers are idempotent: a retried webhook never duplicates a side effect.
+- Shared code in `lib/`:
+  - `http.js`: `wrap` (every handler), `json`, `parseJsonBody`
+  - `errors.js`: throw `badRequest` / `unauthorized`, ...; adapters throw `PlatformError`
+  - `webhook.js`: `verifySecret`
+  - `validate.js`, `log.js` (redacts secrets), `config.js`
+  - `platform/`: the adapter interface (`index.js`), `memory.js`, `tadabase.js`. Adapter behavior is pinned by `tests/lib/platform/contract.test.js`, run against both.
+- New stateful resources in `template.yaml` get `DeletionPolicy: RetainExceptOnCreate` (or `Retain`), `UpdateReplacePolicy: Retain`, and an entry in `tests/infra/stateful-resources.json` with their replacement-forcing properties. That file is append-only, and editing it needs the user's approval.
 - Widgets: no secrets, no `innerHTML` with data, safe to mount twice, visible loading/empty/error states.
 - Commits: `type(scope): summary`, with scopes `functions`, `widgets`, `infra`, `claude`, `docs`.
 - Plans: one file per task in `docs/plans/NN-name.md` (Proposed → WIP → Done), indexed in `docs/plans/README.md`. Use the `plan-task` and `ship-plan` skills.
@@ -34,7 +42,7 @@ The guiding rule: **build natively first; write code only when the platform can'
 - Claude runs read-only `aws` commands only, and none that print secrets (`--with-decryption`, `get-secret-value`, ...).
 - `sam deploy --no-execute-changeset`, run as a command on its own, asks the user; every other `sam deploy` is blocked. `sam delete`, `sam sync`, `sam remote`, `sam package` and `sam pipeline` are blocked.
 - Deploys go through the `safe-deploy` skill: changeset → infra-reviewer → the user executes it.
-- Stateful resources keep `DeletionPolicy: Retain` and `UpdateReplacePolicy: Retain`. Never rename their logical ids. Not enforced by a hook yet: infra-reviewer checks it, and plan 02 adds a template test.
+- Stateful resources keep `DeletionPolicy: Retain` (or `RetainExceptOnCreate`) and `UpdateReplacePolicy: Retain`. Never rename their logical ids or change a property that forces a replacement. `tests/infra/template.test.js` enforces this, and infra-reviewer checks every changeset.
 
 **Secrets**
 - `.env*` (except `.env.example`), `.envrc`, `env.json`, keys and credential stores (`~/.aws`, `~/.ssh`, ...) are never read, searched or written.

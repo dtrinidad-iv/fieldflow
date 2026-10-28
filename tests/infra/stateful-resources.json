@@ -1,0 +1,13 @@
+{
+  "_comment": "Append-only. Every stateful resource in template.yaml, with the properties whose change makes CloudFormation replace it (and lose its data). Removing or changing an entry needs the user's approval: the protect-files hook asks before any edit to this file.",
+  "resources": {
+    "HttpApiAccessLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/http-api-access" } }
+    },
+    "HealthLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Replacement": { "LogGroupName": { "Fn::Sub": "/fieldflow/${Stage}/health" } }
+    }
+  }
+}

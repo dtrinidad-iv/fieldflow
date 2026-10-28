@@ -1,0 +1,38 @@
+# SAM CLI config. Every deploy section keeps confirm_changeset = true (a hook and
+# tests/infra/template.test.js enforce it). Deploys go through the safe-deploy skill:
+#   sam build && sam deploy --config-env <dev|prod> --no-execute-changeset
+version = 0.1
+
+[default.global.parameters]
+stack_name = "fieldflow-dev"
+
+[default.build.parameters]
+cached = true
+parallel = true
+
+[default.validate.parameters]
+lint = true
+
+[default.deploy.parameters]
+stack_name = "fieldflow-dev"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+confirm_changeset = true
+parameter_overrides = "Stage=dev"
+
+[dev.deploy.parameters]
+stack_name = "fieldflow-dev"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+confirm_changeset = true
+parameter_overrides = "Stage=dev"
+
+[prod.deploy.parameters]
+stack_name = "fieldflow-prod"
+region = "us-east-1"
+capabilities = "CAPABILITY_IAM"
+resolve_s3 = true
+confirm_changeset = true
+parameter_overrides = "Stage=prod"

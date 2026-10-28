@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: FieldFlow - serverless extensions for the Tadabase field-service app
+
+# Data safety: every resource that stores data keeps UpdateReplacePolicy: Retain and
+# DeletionPolicy: Retain (or RetainExceptOnCreate, so a failed first deploy doesn't leave
+# orphans that block the next one). Logical ids and the properties that force a replacement
+# never change. tests/infra/template.test.js enforces all of this against
+# tests/infra/stateful-resources.json.
+
+Parameters:
+  Stage:
+    Type: String
+    AllowedValues: [dev, prod]
+    Default: dev
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    Architectures: [arm64]
+    Timeout: 10
+    MemorySize: 256
+    Environment:
+      Variables:
+        STAGE: !Ref Stage
+        # The deployed stack is the only place live Tadabase writes are allowed.
+        FIELDFLOW_ALLOW_LIVE_WRITES: '1'
+        NODE_OPTIONS: --enable-source-maps
+
+Resources:
+  HttpApi:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefaultRouteSettings:
+        ThrottlingBurstLimit: 20
+        ThrottlingRateLimit: 10
+      AccessLogSettings:
+        DestinationArn: !GetAtt HttpApiAccessLogGroup.Arn
+        Format: '{"requestId":"$context.requestId","ip":"$context.identity.sourceIp","method":"$context.httpMethod","path":"$context.path","status":"$context.status","latencyMs":"$context.responseLatency"}'
+
+  HttpApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub /fieldflow/${Stage}/http-api-access
+      RetentionInDays: 30
+
+  HealthFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        EntryPoints:
+          - functions/health/handler.js
+        Format: esm
+        OutExtension:
+          - .js=.mjs
+        Target: es2022
+        Minify: false
+        Sourcemap: true
+    Properties:
+      Description: GET /health - smoke-test target for deploys
+      CodeUri: ./
+      Handler: handler.handler
+      LoggingConfig:
+        LogFormat: JSON
+        LogGroup: !Ref HealthLogGroup
+      Events:
+        Health:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref HttpApi
+            Method: GET
+            Path: /health
+
+  HealthLogGroup:
+    Type: AWS::Logs::LogGroup
+    DeletionPolicy: RetainExceptOnCreate
+    UpdateReplacePolicy: Retain
+    Properties:
+      LogGroupName: !Sub /fieldflow/${Stage}/health
+      RetentionInDays: 30
+
+Outputs:
+  ApiUrl:
+    Description: Base URL of the HTTP API
+    Value: !Sub https://${HttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}

@@ -38,3 +38,8 @@ jobs:
       - name: sam validate
         if: hashFiles('template.yaml') != ''
         run: sam validate --lint
+      # Builds every function the way a deploy would (esbuild bundles), so a broken build
+      # shows up here instead of during safe-deploy.
+      - name: sam build
+        if: hashFiles('template.yaml') != ''
+        run: sam build
