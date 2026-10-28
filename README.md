@@ -343,7 +343,7 @@ This repo is built to make mistakes against live data or AWS hard:
 | 04 | Generate invoice Lambda | Done (live test in 08) |
 | 05 | Signature pad and live total widgets, demo page | Done (live check pending) |
 | 06 | Kanban board (native) | Done (live check pending) |
-| 07 | Job checks (CRM contact sync moved to later) | WIP |
+| 07 | Job checks (CRM contact sync moved to later) | Done (live check pending) |
 | 08 | Deploy, README and walkthrough | Planned |
 
 **Not deployed yet.** The code is complete and tested offline. The first deploy, the live
