@@ -29,8 +29,10 @@ connection is simulated. Anyone with the repository can run it with `npm install
 
 ![The FieldFlow demo: a jobs board with Scheduled, In Progress, Completed and Invoiced columns. An open job shows a Schedule Conflict and an Invoice Problem, the signature pad, and a log of webhooks and what each function answered.](screenshots/demo-board.png)
 
-*A double booking flagged, a job sent back for missing line items, and an invoiced job. The log at
-the bottom shows each webhook and what the function answered.*
+*The board and the job page are the demo's stand-ins for Tadabase's own screens: in production the
+board is Tadabase's native Kanban, with no custom code. The signature pad, the line total and
+everything in the log are real FieldFlow code. Shown: a double booking flagged, a job sent back for
+missing line items, and an invoiced job, with each webhook and what the function answered.*
 
 <img src="screenshots/demo-invoice.png" alt="The generated invoice PDF for Harbor Cafe: one Boiler service line at $120.00, total $120.00." width="480">
 

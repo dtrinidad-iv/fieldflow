@@ -45,8 +45,11 @@ no cost, and nothing leaves your machine.
 
 ![The FieldFlow demo: a jobs board with Scheduled, In Progress, Completed and Invoiced columns. A job that was double-booked and then completed without line items is open in the side panel, showing its Schedule Conflict and Invoice Problem, the signature pad, and below, the log of webhooks and what each function answered.](docs/screenshots/demo-board.png)
 
-*Above: Alex is double-booked on Thursday morning (flagged by `check-schedule`), the job without
-line items was sent back by `generate-invoice`, and Harbor Cafe's job was invoiced. The log at the
+*Above: the board and the job page are the demo's stand-ins for Tadabase's own screens (in
+production the board is Tadabase's native Kanban, with no custom code); the signature pad, the line
+total and everything in the log are real FieldFlow code. Alex is double-booked on Thursday morning
+(flagged by `check-schedule`), the job without line items was sent back by `generate-invoice`, and
+Harbor Cafe's job was invoiced. The log at the
 bottom shows each webhook and what the function answered. Below: the PDF that `generate-invoice`
 rendered for it, opened through its signed link.*
 

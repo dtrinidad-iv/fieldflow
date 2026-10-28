@@ -29,12 +29,20 @@
   <p id="toast" class="toast" role="status" aria-live="polite" hidden></p>
 
   <main class="layout">
-    <section class="board" id="board" aria-label="Jobs board">
-      <p class="empty-state">Loading jobs…</p>
-    </section>
-    <aside class="panel" id="panel" aria-label="Job details">
-      <p class="empty-state">Select a job to see its details, add items, or complete it.</p>
-    </aside>
+    <div class="board-wrap">
+      <p class="stand-in">Stand-in for Tadabase's native Kanban board. In production this is
+        Tadabase's own component, configured in the builder: no custom code.</p>
+      <section class="board" id="board" aria-label="Jobs board">
+        <p class="empty-state">Loading jobs…</p>
+      </section>
+    </div>
+    <div class="panel-wrap">
+      <p class="stand-in">Stand-in for Tadabase's job page and forms. The signature pad and the live
+        line total in it are the real FieldFlow widgets.</p>
+      <aside class="panel" id="panel" aria-label="Job details">
+        <p class="empty-state">Select a job to see its details, add items, or complete it.</p>
+      </aside>
+    </div>
   </main>
 
   <section class="log" aria-label="Behind the scenes">

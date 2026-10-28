@@ -121,13 +121,25 @@ body {
 .badge.warn { background: var(--warn-bg); color: var(--warn); }
 .badge.danger { background: var(--danger-bg); color: var(--danger); }
 
+.board-wrap, .panel-wrap { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.panel-wrap { position: sticky; top: 16px; }
+
+/* Says which parts of the page stand in for Tadabase's own screens. */
+.stand-in {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed #9aa5b4;
+  border-radius: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: transparent;
+}
+
 .panel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px 18px;
-  position: sticky;
-  top: 16px;
 }
 .panel-head { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
 .panel h2 { margin: 0; font-size: 18px; }
