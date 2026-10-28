@@ -9,3 +9,9 @@ coverage/
 *.key
 .DS_Store
 __pycache__/
+
+# Playwright MCP output (screenshots worth keeping go in docs/screenshots/)
+.playwright-mcp/
+
+# npm run demo:invoice
+sample-invoice.pdf

@@ -13,7 +13,9 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "verify": ".claude/skills/verify/verify.sh"
+    "verify": ".claude/skills/verify/verify.sh",
+    "demo": "node scripts/demo-server.js",
+    "demo:invoice": "node scripts/sample-invoice.js"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

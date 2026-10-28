@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FieldFlow demo</title>
+  <link rel="stylesheet" href="/app.css">
+  <link rel="stylesheet" href="/widgets/signature-pad.css">
+  <link rel="stylesheet" href="/widgets/line-total.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <h1>FieldFlow</h1>
+      <p>Northwind Field Services · jobs board</p>
+    </div>
+    <div class="top-actions">
+      <a class="button" href="/sample-invoice.pdf" target="_blank" rel="noopener">Sample invoice</a>
+      <button type="button" id="reset" class="button">Reset demo</button>
+    </div>
+  </header>
+
+  <p class="banner" role="note">
+    <strong>Local demo.</strong> The real FieldFlow functions and widgets run here, against an
+    in-memory stand-in for Tadabase. Nothing leaves this laptop. In production, the same code runs
+    on AWS Lambda behind the client's Tadabase app.
+  </p>
+
+  <p id="toast" class="toast" role="status" aria-live="polite" hidden></p>
+
+  <main class="layout">
+    <section class="board" id="board" aria-label="Jobs board">
+      <p class="empty-state">Loading jobs…</p>
+    </section>
+    <aside class="panel" id="panel" aria-label="Job details">
+      <p class="empty-state">Select a job to see its details, add items, or complete it.</p>
+    </aside>
+  </main>
+
+  <section class="log" aria-label="Behind the scenes">
+    <h2>Behind the scenes</h2>
+    <p class="log-hint">What the functions did, newest first: the webhooks Tadabase would send, and what each one answered.</p>
+    <ol id="log"></ol>
+  </section>
+
+  <script src="/widgets/signature-pad.js"></script>
+  <script src="/widgets/line-total.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
