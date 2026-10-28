@@ -44,7 +44,8 @@ The guiding rule: **build natively first; write code only when the platform can'
 - Claude may not `curl` writes to `api.tadabase.io`.
 
 **AWS**
-- Claude runs read-only `aws` commands only, and none that print secrets (`--with-decryption`, `get-secret-value`, ...).
+- Claude runs read-only `aws` commands only, and none that print secrets (`--with-decryption`, `get-secret-value`, ...), write local files (`s3api get-object`, ...) or reach other hosts (`--endpoint-url`, `--no-sign-request`).
+- Claude's shell uses the AWS profile `fieldflow-claude` (docs/go-live.md, A.6): view-only plus preparing changesets, with AWS-side denies on reading secrets, invoice PDFs and the idempotency table, and on executing deploys. The user's admin profile is `fieldflow`; Claude never switches to it.
 - `sam deploy --no-execute-changeset`, run as a command on its own, asks the user; every other `sam deploy` is blocked. `sam delete`, `sam sync`, `sam remote`, `sam package` and `sam pipeline` are blocked.
 - Deploys go through the `safe-deploy` skill: changeset → infra-reviewer → the user executes it.
 - Stateful resources keep `DeletionPolicy: Retain` (or `RetainExceptOnCreate`) and `UpdateReplacePolicy: Retain`. Never rename their logical ids or change a property that forces a replacement. `tests/infra/template.test.js` enforces this, and infra-reviewer checks every changeset.

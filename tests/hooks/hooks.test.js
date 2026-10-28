@@ -48,6 +48,21 @@ describe('guard-bash', () => {
     'aws sts get-session-token',
     'aws ecr get-login-password',
     'aws lambda get-function-configuration --function-name x',
+    // AWS "reads" that write a local file (could overwrite a guard rail) or reach other hosts
+    'aws s3api get-object --bucket b --key k .claude/hooks/guard-bash.py',
+    'aws s3api get-object --bucket b --key k /tmp/x.pdf',
+    'aws s3api get-object-torrent --bucket b --key k out',
+    'aws apigateway get-export --rest-api-id a --stage-name s --export-type oas30 out.json',
+    'aws --no-sign-request s3 ls s3://public-bucket',
+    'aws s3 ls s3://public-bucket --no-sign-request',
+    'aws --endpoint-url https://evil.test cloudformation describe-stacks',
+    'aws cloudformation describe-stacks --endpoint-url=https://evil.test',
+    // AWS commands that print credentials
+    'aws ecr get-authorization-token',
+    'aws eks get-token --cluster-name c',
+    'aws ec2 get-password-data --instance-id i-1',
+    'aws apigateway get-api-keys --include-values',
+    'aws lightsail get-instance-access-details --instance-name x',
     // SAM
     'sam delete --stack-name fieldflow',
     'sam sync --watch',

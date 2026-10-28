@@ -97,17 +97,29 @@ SECRET_VAR = re.compile(r"\$\{?[A-Z_]*(SECRET|TOKEN|KEY|PASSWORD|CREDENTIAL)[A-Z
 AWS_READ_VERB = re.compile(
     r"^(describe-|get-|list-|ls$|tail$|filter-log-events$|validate-template$|head-object$|wait$)"
 )
-AWS_FLAGS = {"--debug", "--no-verify-ssl", "--no-paginate", "--no-sign-request", "--no-cli-pager",
+AWS_FLAGS = {"--debug", "--no-verify-ssl", "--no-paginate", "--no-cli-pager",
              "--cli-auto-prompt", "--no-cli-auto-prompt", "--version", "--help"}
-AWS_VALUE_OPTS = {"--profile", "--region", "--output", "--query", "--endpoint-url", "--cli-read-timeout",
+AWS_VALUE_OPTS = {"--profile", "--region", "--output", "--query", "--cli-read-timeout",
                   "--cli-connect-timeout", "--ca-bundle", "--color", "--cli-binary-format"}
+# Never needed here, anywhere in the command: --endpoint-url sends the request (and its arguments)
+# to any host, and --no-sign-request reaches other people's public buckets.
+AWS_BLOCKED_OPTS = {"--endpoint-url", "--no-sign-request"}
 AWS_SECRET_READS = {
     ("secretsmanager", "get-secret-value"), ("secretsmanager", "batch-get-secret-value"),
     ("sts", "get-session-token"), ("sts", "get-federation-token"),
     ("ecr", "get-login-password"), ("ecr-public", "get-login-password"),
+    ("ecr", "get-authorization-token"), ("ecr-public", "get-authorization-token"),
+    ("eks", "get-token"), ("ec2", "get-password-data"), ("lightsail", "get-instance-access-details"),
     ("codeartifact", "get-authorization-token"), ("sso", "get-role-credentials"),
     ("lambda", "get-function"), ("lambda", "get-function-configuration"),
-    ("cognito-identity", "get-credentials-for-identity"),
+    ("cognito-identity", "get-credentials-for-identity"), ("cognito-identity", "get-open-id-token"),
+}
+# "get-" commands that write their result to a local file named by an argument: a read verb that
+# could overwrite any path, guard rails included. (S3 objects are also invoice PDFs.)
+AWS_FILE_OUTPUT = {
+    ("s3api", "get-object"), ("s3api", "get-object-torrent"), ("apigateway", "get-export"),
+    ("apigateway", "get-sdk"), ("glacier", "get-job-output"), ("mediastore-data", "get-object"),
+    ("kinesis-video-media", "get-media"), ("kinesis-video-archived-media", "get-clip"),
 }
 HTTP_CLIENTS = {"curl", "curlie", "wget", "http", "https", "xh", "xhs"}
 CURL_VALUE_SHORT = set("AbcCDeEHmoPruUwxyYzQ")
@@ -279,6 +291,9 @@ def check_interpreter(prog, args, bodies):
 def check_aws(prog, args):
     if prog != "aws":
         return
+    blocked = next((a for a in args if a.split("=", 1)[0] in AWS_BLOCKED_OPTS), None)
+    if blocked:
+        block(f"aws {blocked.split('=', 1)[0]} is not allowed (it can reach other hosts or public buckets).")
     i = 0
     while i < len(args) and args[i].startswith("-"):
         arg = args[i]
@@ -299,7 +314,10 @@ def check_aws(prog, args):
         block("aws configure reads or changes credentials.")
     if not AWS_READ_VERB.match(verb):
         block(f"`aws {service} {verb}` can change live AWS resources (only read commands are allowed).")
-    if (service, verb) in AWS_SECRET_READS or any(a.startswith("--with-decryption") for a in rest):
+    if (service, verb) in AWS_FILE_OUTPUT:
+        block(f"`aws {service} {verb}` writes its result to a local file; ask the user to run it.")
+    secret_flag = any(a.startswith(("--with-decryption", "--include-value")) for a in rest)
+    if (service, verb) in AWS_SECRET_READS or secret_flag:
         block(f"`aws {service} {verb}` prints secrets or credentials into the transcript.")
 
 
