@@ -7,7 +7,7 @@ of code where the platform falls short:
 - **AWS Lambda functions** (`functions/`, Node 24, deployed with AWS SAM) for server-side work the
   platform can't do, such as rendering PDF invoices.
 - **Widgets** (`widgets/`, vanilla JS/CSS) injected into app pages for interactions
-  the native components lack, such as a signature pad or a drag-and-drop board.
+  the native components lack, such as a signature pad.
 
 **The rule: build natively first; write code only when the platform can't do it.** The data, the
 forms, the totals and the status rules all live in Tadabase. Every custom piece is listed, with the
@@ -67,9 +67,9 @@ flowchart LR
 | Line totals and the job total | **Native** | Equation and rollup fields |
 | Status changes (for example, `Invoiced` when an invoice is connected) | **Native** | Record rules |
 | Triggering work when a job is completed | **Native** | Outgoing webhooks, filtered by status |
+| Kanban board of jobs by status, drag to change status (plan 06) | **Native** | The Kanban component; Completed and Invoiced are guarded so the board can't skip the signature or the invoice |
 | PDF invoice, generated and stored privately | **Custom**, Lambda (plan 04) | No server-side PDF rendering, and no private file storage reachable through the API |
 | Signature capture, and a total that updates while typing | **Custom**, widgets (plan 05) | Native forms have no drawing pad, and totals update only on save |
-| Drag-and-drop kanban board by status | **Custom**, widget and proxy Lambda (plan 06) | No native kanban view with drag-to-update |
 | Syncing contacts to a CRM, validating jobs | **Custom**, Lambdas (plan 07) | Needs custom logic and calls to another API |
 
 ## Features
@@ -78,6 +78,9 @@ flowchart LR
 - **Trigger:** `POST /webhooks/job-completed`, body `{"recordId": "<job id>"}`, header
   `X-FieldFlow-Secret`. It doesn't trust the payload: it re-reads the job and does nothing unless
   the job's status is `Completed`.
+- **Signed jobs only:** a job is invoiced only when it has the customer's signature (a PNG from
+  the signature pad), however its status became Completed. Without one: `422`, and nothing is
+  created until the job is signed and saved again.
 - **Invoice number:** `INV-<jobId>`, deterministic, so a retry always produces the same number and
   the same file.
 - **Strict money handling:** prices are parsed strictly in US format (`1234.50`, at most 2
@@ -97,7 +100,7 @@ flowchart LR
   | `200` | Invoice already exists, or the job isn't Completed (nothing done) |
   | `401` | Missing or wrong webhook secret |
   | `409` | Another delivery for the same job is still running; retry later |
-  | `422` | The job can't be invoiced: no customer, no line items, an unreadable amount, or a Total that doesn't match. Fix the job and save it again. |
+  | `422` | The job can't be invoiced: no customer signature, no customer, no line items, an unreadable amount, or a Total that doesn't match. Fix the job and save it again. |
   | `502` / `503` | The app didn't answer, or time ran out. Nothing is lost: a retry finishes it without making a second invoice. |
 
 ### Invoice links (`functions/invoice-pdf`)
@@ -219,7 +222,9 @@ The full step-by-step guide is **[docs/tadabase-setup.md](docs/tadabase-setup.md
 7. **Install the widgets:** paste `widgets/*.js` and `widgets/*.css` into the app's custom
    JavaScript and CSS, and add the mount snippets from [widgets/README.md](widgets/README.md). This
    doesn't depend on AWS, so it can be done before the deploy.
-8. **After deploying, add the outgoing webhook:** Jobs, on record update, filtered to Status =
+8. **Add the Kanban board:** a native Kanban component on Jobs, grouped by Status, with Completed
+   and Invoiced guarded (setup guide section 9). No code involved.
+9. **After deploying, add the outgoing webhook:** Jobs, on record update, filtered to Status =
    `Completed`, `POST` to the `JobCompletedWebhookUrl` stack output, with header
    `X-FieldFlow-Secret: <webhook-secret>` and body `{"recordId": "{record_id}"}`.
 
@@ -319,7 +324,7 @@ This repo is built to make mistakes against live data or AWS hard:
 | 03 | Tadabase setup guide and live adapter wiring | Done (live check pending) |
 | 04 | Generate invoice Lambda | Done (live test in 08) |
 | 05 | Signature pad and live total widgets, demo page | Done (live check pending) |
-| 06 | Kanban board widget and proxy Lambda | Planned |
+| 06 | Kanban board (native) | WIP |
 | 07 | Contact sync and job validation Lambdas | Planned |
 | 08 | Deploy, README and walkthrough | Planned |
 

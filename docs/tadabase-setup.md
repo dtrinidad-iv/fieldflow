@@ -30,7 +30,6 @@ code use. The **Type** column is the Tadabase field type to pick.
 |---|---|---|
 | Name | `name` | Text |
 | Email | `email` | Email |
-| Color | `color` | Text (a hex color, used by the kanban board) |
 
 ### Jobs
 | Field | Logical name | Type |
@@ -69,7 +68,8 @@ You can add more fields; the code ignores anything it doesn't map.
 - **Status changes** use native record rules where they can: for example, set Status to
   `Invoiced` when an Invoices record is connected.
 - **Pages:** a Jobs table with a details page, a form for Job Items inside the job details, and
-  a page per technician. The widgets in plans 05 and 06 attach to these pages.
+  a page per technician. The plan 05 widgets attach to these pages, and the plan 06 Kanban board
+  is a native component on them.
 
 ## 4. API key
 1. In the builder: **Settings → API Keys → Add API key**. Create **two keys in each app**:
@@ -162,8 +162,8 @@ The function answers:
 - `201` when it created the invoice
 - `200` when the invoice already exists, or the job isn't Completed (nothing happens)
 - `409` when another delivery for the same job is still running
-- `422` when the job has no customer, no line items, an amount it can't read, or a Total that
-  differs from its line items. Fix the job and save it again.
+- `422` when the job has no customer signature (section 8), no customer, no line items, an amount
+  it can't read, or a Total that differs from its line items. Fix the job and save it again.
 - `503` or `5xx` when it ran out of time or the app didn't answer: nothing is lost, and a retry (or
   saving the job again) finishes it, never creating a second invoice.
 
@@ -174,8 +174,11 @@ is saved by the form's own Save button, and the total is display only. Try them 
 `demo/index.html` (open it in a browser).
 
 1. **Complete job form:** on the job details page, add a form that edits the job, with
-   **Signature** (Long Text) and **Status**. Optional, native: make Signature required on this form,
-   so a job can't be completed unsigned.
+   **Signature** (Long Text). Don't show Status as a free dropdown, which would also offer
+   `Invoiced`: have the form set Status to `Completed` on submit (a form rule, or a fixed value).
+   Make Signature **required** on this form. The invoice function also refuses a job without a
+   signature (422, nothing created), however its Status became Completed, so an unsigned job is
+   never invoiced. Once it's signed and saved, it's invoiced as usual.
 2. **Lock the signature down.** The signature is only as trustworthy as who can edit the field.
    Anyone who can edit Signature can paste in another image, for example one copied from another
    job. So, natively:
@@ -193,16 +196,60 @@ is saved by the form's own Save button, and the total is display only. Try them 
       (right-click → Inspect) and note its attributes: the widget looks for `name="field_NN"`.
    2. Sign a test job and press Save. The job details page shows the signature as an image, which
       proves the value was saved and came back intact.
-   3. If Signature is required: press Save without signing. You should see a visible "required"
+   3. Press Save without signing. You should see a visible "required"
       message, not a Save button that silently does nothing.
    4. Add a job item. The total updates while you type, and matches the native Line Total after
       saving. Type `1.234,50` as the price: a hint appears. If nothing appears, the inputs are
       `type="number"` (the browser hides what was typed), and the hint can only cover text inputs.
+
+## 9. Kanban board (plan 06)
+The board is **native**: Tadabase's Kanban component shows jobs as cards in columns by Status, and
+dragging a card to another column updates the job's Status, under the board's permissions and with
+record rules applied. No code is involved.
+
+1. **The office board:** on an office page, add a **Kanban** component:
+   - Table **Jobs**, grouped by **Status**.
+   - Columns in this order: `Scheduled`, `In Progress`, `Completed`, `Invoiced`.
+   - Card fields: Title, Customer, Scheduled Date, Technician, and nothing editable on the card.
+     Never put Signature on a card.
+2. **Guard rails.** Two statuses must not be set, or undone, by dragging:
+   - **Completed** invoices the job (the job-completed webhook, section 7) and should go through
+     the Complete job form, which takes the customer's signature (section 8).
+   - **Invoiced** is set by the record rule when an invoice is created. Set by hand, it marks a job
+     invoiced with no invoice.
+
+   So, in the builder, use the first option that's available:
+   1. Lock **Completed** and **Invoiced** both ways: cards can't be dropped into them, and cards
+      in them can't be dragged out. They're still shown.
+   2. Otherwise (including if only drops *into* a column can be blocked), show only **Scheduled**
+      and **In Progress** on the board. Under it, add a native table of Jobs filtered to Status is
+      Completed or Invoiced, **read-only**: no inline edit, no edit action, only a link to the
+      details page.
+
+   Why both ways: a job pulled back out of Completed or Invoiced and completed again **never gets
+   a second invoice, but its invoice isn't updated either, and the job doesn't return to
+   Invoiced** (the record rule only fires when an invoice is created). The PDF and Amount keep the
+   old total. Invoices aren't corrected through the board: a correction is a manual office task
+   (void and re-issue isn't built).
+3. **Permissions:** only the office and technician roles can drag cards. Any other role (for
+   example customers) doesn't see the board.
+4. **Technician board (recommended):** on the technician page, the same component filtered to jobs
+   whose Technician is the logged-in user, and keep the office board to the office role. That
+   needs a connection from Technicians to Users (native; the code doesn't use it). Without it,
+   every technician sees, and can move, every job on the office board.
+5. **Optional, for phones** (where dragging is awkward): a native action link on each card, such
+   as **Start** (sets Status to `In Progress`). Don't add a "Complete" action: completing goes
+   through the form.
+6. **Check on the dev app:**
+   1. Drag a card from Scheduled to In Progress, then reload the page: it stays moved.
+   2. A card can't be dropped into Completed or Invoiced, and a card in them can't be dragged
+      back out (option 1); or those columns aren't on the board (option 2).
+   3. Signed in as a role without permission, cards can't be dragged.
+   4. No form or table lets anyone set Status to `Invoiced` by hand.
 
 ## What stays custom
 | Need | Why the platform can't do it natively | Plan |
 |---|---|---|
 | PDF invoice generated and stored | No server-side PDF rendering or file storage API | 04 |
 | Signature capture, live total while typing | Native forms have no drawing pad, and totals update only on save | 05 |
-| Drag-and-drop kanban by status | No native kanban view with drag-to-update | 06 |
 | Sync contacts to a CRM, validate jobs | Needs custom logic and calls to another API | 07 |
