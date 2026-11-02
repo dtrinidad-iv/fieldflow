@@ -14,7 +14,9 @@ forms, the totals and the status rules all live in Tadabase. Every custom piece 
 reason it exists, in [Native vs custom](#native-vs-custom).
 
 **New here?** [docs/overview.md](docs/overview.md) is a one-page tour: how a job flows, screenshots,
-native vs custom, the architecture, and how it was built with Claude Code.
+native vs custom, the architecture, and how it was built with Claude Code. To read the code,
+start with [docs/code-guide.md](docs/code-guide.md): every folder and file, how they connect, and
+where to look for what.
 
 ## Contents
 - [Try it in 1 minute (local demo)](#try-it-in-1-minute-local-demo)
